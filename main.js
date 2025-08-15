@@ -51,6 +51,14 @@ app.whenReady().then(async () => {
     console.log('Screen capture permission request failed:', error.message);
   }
 
+  // Request microphone permissions for audio capture
+  try {
+    const audioPermission = await systemPreferences.askForMediaAccess('microphone');
+    console.log('Microphone permission granted:', audioPermission);
+  } catch (error) {
+    console.log('Microphone permission request failed:', error.message);
+  }
+
   createWindow();
 });
 

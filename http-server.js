@@ -63,9 +63,10 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 HTTP server running on port ${PORT}`);
-  console.log(`📱 Viewer available at: http://localhost:${PORT}`);
+  console.log(`📱 Local access: http://localhost:${PORT}`);
+  console.log(`📱 Network access: http://YOUR_LOCAL_IP:${PORT}`);
   console.log(`🔗 Example session: http://localhost:${PORT}?session=D0AGEVHU`);
   console.log(`📁 Serving files from: ${__dirname}`);
 });

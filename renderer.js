@@ -134,9 +134,14 @@ async function startScreenCapture() {
                 id: primarySource.id
             });
             
-            // Get media stream
+            // Get media stream with audio
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: false,
+                audio: {
+                    mandatory: {
+                        chromeMediaSource: 'desktop',
+                        chromeMediaSourceId: primarySource.id
+                    }
+                },
                 video: {
                     mandatory: {
                         chromeMediaSource: 'desktop',
@@ -152,6 +157,44 @@ async function startScreenCapture() {
             
             console.log('✅ Screen capture started');
             localStream = stream;
+            
+            // Log audio and video tracks
+            const audioTracks = stream.getAudioTracks();
+            const videoTracks = stream.getVideoTracks();
+            console.log(`🎵 Audio tracks: ${audioTracks.length}`);
+            console.log(`🎬 Video tracks: ${videoTracks.length}`);
+            
+            if (audioTracks.length > 0) {
+                audioTracks.forEach((track, index) => {
+                    console.log(`🔊 Audio track ${index}:`, {
+                        kind: track.kind,
+                        label: track.label,
+                        enabled: track.enabled,
+                        muted: track.muted,
+                        readyState: track.readyState
+                    });
+                });
+            }
+            
+            // Try to add system audio if not already included
+            try {
+                const audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+                
+                // Add audio tracks to the main stream
+                audioStream.getAudioTracks().forEach(track => {
+                    localStream.addTrack(track);
+                });
+                console.log('🔊 System audio added to stream');
+            } catch (audioError) {
+                console.log('⚠️ Could not add system audio:', audioError.message);
+                console.log('📺 Desktop audio should still work if available');
+            }
             
             // Create WebRTC peer connection
             createPeerConnection();

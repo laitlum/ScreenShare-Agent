@@ -81,7 +81,13 @@ const wss = new WebSocket.Server({ server });
 
 const sessions = {};
 
-console.log('🚀 Combined HTTP + WebSocket server running on port 3000');
+// Start the server on all network interfaces
+server.listen(PORT, '0.0.0.0', () => {
+  console.log('🚀 Combined HTTP + WebSocket server running on port 3000');
+  console.log(`📱 Local access: http://localhost:${PORT}`);
+  console.log(`📱 Network access: http://YOUR_LOCAL_IP:${PORT}`);
+  console.log(`🔗 Example session: http://localhost:${PORT}?session=D0AGEVHU`);
+});
 
 wss.on("connection", (ws) => {
   console.log('🔌 New client connected');
