@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreenShare Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af',
+                        secondary: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-white rounded-xl shadow-lg overflow-hidden">
+            <!-- Header -->
+            <div class="bg-primary text-white p-6 text-center">
+                <h1 class="text-xl font-semibold mb-1">ScreenShare Agent</h1>
+                <p class="text-sm opacity-90">Getscreen.me 3.4.4</p>
+                <p class="text-xs opacity-75 mt-1">Agent</p>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex bg-secondary border-b border-gray-200">
+                <button id="share-tab" class="flex-1 py-3 px-4 text-sm font-medium text-primary border-b-2 border-primary">
+                    Share Screen
+                </button>
+                <button id="permanent-tab" class="flex-1 py-3 px-4 text-sm font-medium text-gray-500 hover:text-gray-700">
+                    Permanent Access
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6">
+                <!-- Share Screen Content -->
+                <div id="share-content" class="text-center">
+                    <div class="w-20 h-20 mx-auto mb-6 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    
+                    <h2 class="text-lg font-semibold text-gray-800 mb-2">Grant Access to This Screen</h2>
+                    <p class="text-gray-600 mb-4">Generate a link for connection and send it to your partner</p>
+                    
+                    <a href="#" class="text-blue-600 hover:text-blue-800 text-sm underline">How it Works?</a>
+                    
+                    <!-- QR Code Placeholder -->
+                    <div class="w-32 h-32 mx-auto my-6 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                        <span class="text-gray-400 text-xs">QR Code</span>
+                    </div>
+                    
+                    <!-- Session Link -->
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+                        <p class="text-sm text-gray-600 mb-1">Session Link:</p>
+                        <p id="session-link" class="text-sm font-mono text-gray-800 break-all">Click "Start Sharing" to generate</p>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="space-y-3">
+                        <button id="start-sharing-btn" class="w-full bg-primary text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                            Start Sharing
+                        </button>
+                        <button id="stop-sharing-btn" class="w-full bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors font-medium hidden">
+                            Stop Sharing
+                        </button>
+                        <button id="copy-link-btn" class="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium hidden">
+                            Copy Link
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Permanent Access Content -->
+                <div id="permanent-content" class="text-center hidden">
+                    <div class="w-20 h-20 mx-auto mb-6 bg-purple-100 rounded-full flex items-center justify-center">
+                        <svg class="w-10 h-10 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                        </svg>
+                    </div>
+                    
+                    <h2 class="text-lg font-semibold text-gray-800 mb-2">Permanent Access</h2>
+                    <p class="text-gray-600 mb-4">Set up permanent remote access to this device</p>
+                    
+                    <button class="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium">
+                        Configure Permanent Access
+                    </button>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-gray-50 px-6 py-3 text-center">
+                <div class="flex items-center justify-center space-x-2">
+                    <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span class="text-xs text-gray-600">go.getscreen.me</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="status-message" class="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300">
+        <span id="status-text"></span>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

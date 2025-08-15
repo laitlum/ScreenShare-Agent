@@ -1,0 +1,30 @@
+{
+  "name": "electron-remote",
+  "version": "1.0.0",
+  "description": "Screen sharing application with remote control capabilities",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "signaling": "node signaling-server.js",
+    "viewer": "node http-server.js",
+    "dev:all": "concurrently \"npm run signaling\" \"npm run viewer\" \"npm run dev\""
+  },
+  "keywords": [
+    "electron",
+    "screen-sharing",
+    "remote-control",
+    "webrtc",
+    "websocket"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "electron": "^28.0.0",
+    "ws": "^8.14.2"
+  }
+}
