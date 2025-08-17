@@ -15,7 +15,11 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
       enableScreenCapturing: true,
-      webSecurity: false
+      webSecurity: false,
+      // Enable these for better media capture support
+      enableWebCodecs: true,
+      // Allow insecure content for development
+      allowRunningInsecureContent: true
     },
   });
 
@@ -57,6 +61,29 @@ app.whenReady().then(async () => {
     console.log('Microphone permission granted:', audioPermission);
   } catch (error) {
     console.log('Microphone permission request failed:', error.message);
+  }
+
+  // Request screen recording permissions (required for desktop audio on macOS)
+  if (process.platform === 'darwin') {
+    try {
+      const screenRecordingPermission = systemPreferences.getMediaAccessStatus('screen');
+      console.log('Screen recording permission status:', screenRecordingPermission);
+      
+      if (screenRecordingPermission !== 'granted') {
+        console.log('⚠️ Screen recording permission required for desktop audio capture');
+        console.log('Please enable screen recording for this app in System Preferences > Security & Privacy > Privacy > Screen Recording');
+        
+        // Try to request screen recording permission
+        try {
+          const screenRecordingRequest = await systemPreferences.askForMediaAccess('screen');
+          console.log('Screen recording permission request result:', screenRecordingRequest);
+        } catch (requestError) {
+          console.log('Screen recording permission request failed:', requestError.message);
+        }
+      }
+    } catch (error) {
+      console.log('Screen recording permission check failed:', error.message);
+    }
   }
 
   createWindow();
@@ -231,6 +258,29 @@ ipcMain.handle("get-display-media", async () => {
     }
   } catch (error) {
     console.error('❌ Failed to get display media:', error.message);
+    throw error;
+  }
+});
+
+// IPC handler for getting desktop sources (fallback)
+ipcMain.handle("get-desktop-sources", async (event, options) => {
+  try {
+    console.log('🔍 Getting desktop sources via main process...');
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 },
+      ...options
+    });
+    
+    console.log(`📺 Found ${sources.length} desktop sources via main process:`, sources.map(s => ({ name: s.name, id: s.id })));
+    
+    if (sources.length > 0) {
+      return sources;
+    } else {
+      throw new Error('No desktop sources found');
+    }
+  } catch (error) {
+    console.error('❌ Failed to get desktop sources via main process:', error.message);
     throw error;
   }
 });

@@ -11,6 +11,8 @@ const server = http.createServer((req, res) => {
   
   if (req.url === '/' || req.url === '/index.html') {
     filePath = path.join(__dirname, 'viewer.html');
+  } else if (req.url === '/audio-test') {
+    filePath = path.join(__dirname, 'audio-test.html');
   } else if (req.url.endsWith('.js')) {
     filePath = path.join(__dirname, req.url);
   } else {

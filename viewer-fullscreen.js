@@ -11,9 +11,50 @@ const fullscreenOverlay = document.getElementById('fullscreen-overlay');
 const connectionStatus = document.getElementById('connection-status');
 const statusText = document.getElementById('status-text');
 
+
+// Setup minimal fullscreen listeners (no exit functionality)
+function setupFullscreenListeners() {
+    console.log('🔍 Setting up minimal fullscreen listeners...');
+    
+    // Only listen for key events (no exit functionality)
+    document.addEventListener('keydown', handleDocumentKeyDown, true);
+    
+    console.log('✅ Minimal fullscreen listeners setup complete');
+}
+
+// Handle key events at document level (no exit functionality)
+function handleDocumentKeyDown(event) {
+    // No key handling needed - stay in fullscreen
+    console.log('🔑 Key pressed in fullscreen mode:', event.key);
+}
+
+// Enter tab-level fullscreen mode (CSS-based, not system fullscreen)
+function enterTrueFullscreen() {
+    try {
+        console.log('🖥️ Entering tab-level fullscreen mode...');
+        
+        // Add fullscreen class to body for tab-level fullscreen
+        document.body.classList.add('fullscreen-mode');
+        
+
+        
+        // Don't request system fullscreen - stay within tab
+        console.log('✅ Tab-level fullscreen mode activated');
+        
+    } catch (error) {
+        console.error('❌ Error entering fullscreen:', error);
+    }
+}
+
 // Initialize the viewer
 function init() {
     console.log('🚀 Initializing full-screen viewer...');
+    
+    // Enter true fullscreen mode
+    enterTrueFullscreen();
+    
+    // Setup fullscreen change listeners
+    setupFullscreenListeners();
     
     // Check if session ID is in URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -207,6 +248,85 @@ function createPeerConnection() {
             console.log('🎥 Received remote track');
             if (event.streams && event.streams[0]) {
                 remoteVideo.srcObject = event.streams[0];
+                
+                // Log stream details for debugging
+                const stream = event.streams[0];
+                console.log(`🎬 Stream tracks: ${stream.getTracks().length}`);
+                stream.getTracks().forEach((track, index) => {
+                    console.log(`Track ${index}:`, {
+                        kind: track.kind,
+                        label: track.label,
+                        enabled: track.enabled,
+                        muted: track.muted,
+                        readyState: track.readyState
+                    });
+                });
+                
+                // Check for audio tracks and enable by default
+                const audioTracks = stream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    console.log('🔊 Audio detected in fullscreen stream');
+                    // Enable audio by default (no more muted)
+                    remoteVideo.muted = false;
+                    console.log('🔊 Fullscreen audio enabled by default');
+                    
+                    // Optimize audio tracks for better quality
+                    audioTracks.forEach((track, index) => {
+                        console.log(`🔊 Fullscreen audio track ${index} details:`, {
+                            kind: track.kind,
+                            label: track.label,
+                            enabled: track.enabled,
+                            muted: track.muted,
+                            readyState: track.readyState,
+                            id: track.id
+                        });
+                        
+                        // Enable the track for better quality
+                        track.enabled = true;
+                        
+                        // Apply audio processing if supported
+                        if (track.getSettings) {
+                            const settings = track.getSettings();
+                            console.log('🔊 Fullscreen audio track settings:', settings);
+                        }
+                        
+                        // Set audio track parameters for better quality
+                        if (track.getCapabilities) {
+                            const capabilities = track.getCapabilities();
+                            console.log('🔊 Fullscreen audio track capabilities:', capabilities);
+                        }
+                    });
+                    
+                    // Apply audio context for better processing and noise reduction
+                    if (window.AudioContext || window.webkitAudioContext) {
+                        try {
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const source = audioContext.createMediaElementSource(remoteVideo);
+                            const gainNode = audioContext.createGain();
+                            const biquadFilter = audioContext.createBiquadFilter();
+                            
+                            // Configure audio processing chain
+                            source.connect(biquadFilter);
+                            biquadFilter.connect(gainNode);
+                            gainNode.connect(audioContext.destination);
+                            
+                            // Set filter to reduce noise (high-pass filter)
+                            biquadFilter.type = 'highpass';
+                            biquadFilter.frequency.value = 80; // Cut off frequencies below 80Hz
+                            biquadFilter.Q.value = 1;
+                            
+                            // Set gain
+                            gainNode.gain.value = 0.7; // Reduce volume slightly to prevent clipping
+                            
+                            console.log('🔊 Fullscreen audio processing chain applied for noise reduction');
+                        } catch (audioError) {
+                            console.log('⚠️ Fullscreen audio processing not supported:', audioError.message);
+                        }
+                    }
+                } else {
+                    console.log('🔇 No audio tracks in fullscreen stream');
+                }
+                
                 // Ensure autoplay starts when metadata is loaded
                 if (typeof remoteVideo.play === 'function') {
                     remoteVideo.onloadedmetadata = () => {
@@ -294,6 +414,7 @@ function disconnect() {
 function showFullscreenOverlay() {
     fullscreenOverlay.classList.remove('hidden');
     remoteVideo.classList.add('hidden');
+    keyboardHints.classList.add('hidden');
 }
 
 // Hide fullscreen overlay
@@ -304,11 +425,13 @@ function hideFullscreenOverlay() {
 // Show remote video
 function showRemoteVideo() {
     remoteVideo.classList.remove('hidden');
+    keyboardHints.classList.remove('hidden');
 }
 
 // Hide remote video
 function hideRemoteVideo() {
     remoteVideo.classList.add('hidden');
+    keyboardHints.classList.add('hidden');
 }
 
 // Update connection status
@@ -428,6 +551,22 @@ function handleKeyDown(event) {
         return;
     }
     
+    // Handle ESC key for exiting fullscreen - with higher priority
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation(); // Stop event from bubbling up to browser
+        console.log('🔑 ESC key pressed - exiting fullscreen');
+        exitFullscreen();
+        return;
+    }
+    
+    // Handle A key for audio toggle
+    if (event.key === 'A' || event.key === 'a') {
+        event.preventDefault();
+        toggleAudio();
+        return;
+    }
+    
     // Send key press event
     ws.send(JSON.stringify({
         type: 'viewer-input',
@@ -468,14 +607,6 @@ function ensureVideoPlayingOnce() {
     };
     window.addEventListener('click', tryPlay, true);
     window.addEventListener('keydown', tryPlay, true);
-}
-
-// Exit fullscreen function
-function exitFullscreen() {
-    // Go back to the regular viewer
-    const currentUrl = new URL(window.location);
-    currentUrl.pathname = '/viewer.html';
-    window.location.href = currentUrl.toString();
 }
 
 // Initialize when DOM is loaded

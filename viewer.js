@@ -10,8 +10,6 @@ const connectionForm = document.getElementById('connection-form');
 const sessionInput = document.getElementById('session-input');
 const connectBtn = document.getElementById('connect-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
-const fullscreenBtn = document.getElementById('fullscreen-btn');
-const audioToggleBtn = document.getElementById('audio-toggle-btn');
 const remoteScreenContainer = document.getElementById('remote-screen-container');
 const remoteVideo = document.getElementById('remote-video');
 const videoOverlay = document.getElementById('video-overlay');
@@ -25,10 +23,19 @@ const audioControls = document.getElementById('audio-controls');
 const volumeSlider = document.getElementById('volume-slider');
 const volumeValue = document.getElementById('volume-value');
 const audioInstructions = document.getElementById('audio-instructions');
+const fullscreenBtn = document.getElementById('fullscreen-btn');
+const audioToggleBtn = document.getElementById('audio-toggle-btn');
 
 // Initialize the viewer
 function init() {
     console.log('🚀 Initializing viewer...');
+    
+    // Debug DOM elements
+    console.log('🔍 Checking DOM elements...');
+    console.log('📺 Remote video element:', remoteVideo);
+    console.log('👁️ Video overlay element:', videoOverlay);
+    console.log('🖥️ Remote screen container:', remoteScreenContainer);
+    
     setupEventListeners();
     
     // Check if session ID is in URL
@@ -70,6 +77,7 @@ function setupEventListeners() {
             remoteVideo.volume = volume / 100;
         }
     });
+
 }
 
 // Connect to a session
@@ -251,7 +259,9 @@ function createPeerConnection() {
         peerConnection.ontrack = (event) => {
           console.log('🎥 Received remote track');
           if (event.streams && event.streams[0]) {
+            console.log('📺 Setting video source object...');
             remoteVideo.srcObject = event.streams[0];
+            console.log('✅ Video source object set');
             
             // Log stream details
             const stream = event.streams[0];
@@ -266,52 +276,162 @@ function createPeerConnection() {
                 });
             });
             
-            // Check for audio tracks and show audio controls
-            const audioTracks = stream.getAudioTracks();
-            if (audioTracks.length > 0) {
-                console.log('🔊 Audio detected in stream');
-                audioControls.classList.remove('hidden');
-                audioToggleBtn.classList.remove('hidden');
-                
-                // Show audio instructions
-                const audioInstructions = document.getElementById('audio-instructions');
-                if (audioInstructions) {
-                    audioInstructions.classList.remove('hidden');
+                            // Check for audio tracks and show audio controls
+                const audioTracks = stream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    console.log('🔊 Audio detected in stream');
+                    audioControls.classList.remove('hidden');
+                    audioToggleBtn.classList.remove('hidden');
+                    
+                    // Show audio instructions
+                    if (audioInstructions) {
+                        audioInstructions.classList.remove('hidden');
+                    }
+                    
+                    // Start muted to avoid autoplay issues and feedback
+                    remoteVideo.muted = true;
+                    console.log('🔇 Video muted initially to avoid feedback');
+                    
+                    // Log audio track details for debugging
+                    audioTracks.forEach((track, index) => {
+                        console.log(`🔊 Audio track ${index} details:`, {
+                            kind: track.kind,
+                            label: track.label,
+                            enabled: track.enabled,
+                            muted: track.muted,
+                            readyState: track.readyState,
+                            id: track.id
+                        });
+                        
+                        // Enable the track for better quality
+                        track.enabled = true;
+                        
+                        // Apply audio processing if supported
+                        if (track.getSettings) {
+                            const settings = track.getSettings();
+                            console.log('🔊 Audio track settings:', settings);
+                        }
+                        
+                        // Set audio track parameters for better quality
+                        if (track.getCapabilities) {
+                            const capabilities = track.getCapabilities();
+                            console.log('🔊 Audio track capabilities:', capabilities);
+                        }
+                    });
+                    
+                    // Apply audio context for better processing and noise reduction
+                    if (window.AudioContext || window.webkitAudioContext) {
+                        try {
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const source = audioContext.createMediaElementSource(remoteVideo);
+                            const gainNode = audioContext.createGain();
+                            const biquadFilter = audioContext.createBiquadFilter();
+                            
+                            // Configure audio processing chain
+                            source.connect(biquadFilter);
+                            biquadFilter.connect(gainNode);
+                            gainNode.connect(audioContext.destination);
+                            
+                            // Set filter to reduce noise (high-pass filter)
+                            biquadFilter.type = 'highpass';
+                            biquadFilter.frequency.value = 80; // Cut off frequencies below 80Hz
+                            biquadFilter.Q.value = 1;
+                            
+                            // Set gain
+                            gainNode.gain.value = 0.7; // Reduce volume slightly to prevent clipping
+                            
+                            console.log('🔊 Audio processing chain applied for noise reduction');
+                        } catch (audioError) {
+                            console.log('⚠️ Audio processing not supported:', audioError.message);
+                        }
+                    }
+                } else {
+                    console.log('🔇 No audio tracks in stream');
+                    audioControls.classList.add('hidden');
+                    audioToggleBtn.classList.add('hidden');
+                    
+                    // Hide audio instructions
+                    if (audioInstructions) {
+                        audioInstructions.classList.add('hidden');
+                    }
                 }
-                
-                // Start muted to avoid autoplay issues
-                remoteVideo.muted = true;
-                console.log('🔇 Video muted initially to avoid autoplay issues');
-            } else {
-                console.log('🔇 No audio tracks in stream');
-                audioControls.classList.add('hidden');
-                audioToggleBtn.classList.add('hidden');
-                
-                // Hide audio instructions
-                const audioInstructions = document.getElementById('audio-instructions');
-                if (audioInstructions) {
-                    audioInstructions.classList.add('hidden');
-                }
-            }
             
-            // Ensure autoplay starts when metadata is loaded (muted)
+            // Ensure autoplay starts when metadata is loaded
             if (typeof remoteVideo.play === 'function') {
+              console.log('🎬 Setting up video autoplay...');
               remoteVideo.onloadedmetadata = () => {
-                try { 
-                    remoteVideo.play(); 
-                    console.log('✅ Video started playing (muted)');
-                } catch (error) {
+                console.log('📺 Video metadata loaded, attempting to play...');
+                
+                // Try to play with user interaction fallback
+                const playVideo = async () => {
+                  try { 
+                    await remoteVideo.play(); 
+                    console.log('✅ Video started playing');
+                  } catch (error) {
                     console.log('⚠️ Video autoplay failed:', error.message);
-                }
+                    
+                    // If autoplay fails, show a play button overlay
+                    if (error.name === 'NotAllowedError') {
+                      console.log('🔒 Autoplay blocked, showing play button...');
+                      showPlayButtonOverlay();
+                    }
+                  }
+                };
+                
+                // Try immediate play first
+                playVideo();
               };
             }
+            
+            console.log('🔄 Ensuring video plays once...');
             ensureVideoPlayingOnce();
+            
+            console.log('👁️ Hiding video overlay...');
             hideVideoOverlay();
+            
+            // Force video element to be visible
+            console.log('📺 Ensuring video element is visible...');
+            if (remoteVideo) {
+                remoteVideo.style.display = 'block';
+                remoteVideo.style.visibility = 'visible';
+                remoteVideo.style.opacity = '1';
+                
+                // Ensure proper dimensions
+                remoteVideo.style.width = '100%';
+                remoteVideo.style.height = 'auto';
+                remoteVideo.style.minHeight = '400px';
+                
+                // Add click event to help with autoplay
+                remoteVideo.onclick = async () => {
+                    if (remoteVideo.paused) {
+                        try {
+                            console.log('🖱️ Video clicked, attempting to play...');
+                            await remoteVideo.play();
+                            console.log('✅ Video started playing after click');
+                        } catch (error) {
+                            console.log('⚠️ Video play failed after click:', error.message);
+                        }
+                    }
+                };
+                
+                console.log('✅ Video element visibility and dimensions enforced');
+                console.log('📐 Video element dimensions:', {
+                    offsetWidth: remoteVideo.offsetWidth,
+                    offsetHeight: remoteVideo.offsetHeight,
+                    clientWidth: remoteVideo.clientWidth,
+                    clientHeight: remoteVideo.clientHeight
+                });
+            }
+            
+            console.log('🔗 Setting connection state...');
             isConnected = true;
             showSuccess('Remote screen connected! You can now control the remote computer.');
             
+            console.log('🎮 Setting up remote control...');
             // Setup remote control event listeners
             setupRemoteControl();
+            
+            console.log('✅ Track handling complete');
           }
         };
         
@@ -398,6 +518,162 @@ function hideRemoteScreen() {
 // Hide video overlay
 function hideVideoOverlay() {
     videoOverlay.classList.add('hidden');
+}
+
+// Show remote video
+function showRemoteVideo() {
+    if (remoteVideo) {
+        // Video element is already visible, just ensure it's playing
+        console.log('✅ Remote video displayed');
+    }
+}
+
+// Toggle audio on/off
+function toggleAudio() {
+    if (remoteVideo.muted) {
+        // Try to unmute - this requires user interaction
+        try {
+            console.log('🔊 Attempting to enable audio...');
+            
+            // First, ensure the video element is ready
+            if (remoteVideo.readyState < 2) { // HAVE_CURRENT_DATA
+                console.log('⚠️ Video not ready yet, waiting for metadata...');
+                showError('Video not ready yet. Please wait a moment and try again.');
+                return;
+            }
+            
+            // Unmute the video
+            remoteVideo.muted = false;
+            console.log('🔊 Video unmuted');
+            
+            // Try to play to ensure audio is active
+            remoteVideo.play().then(() => {
+                console.log('✅ Audio successfully enabled');
+                audioToggleBtn.textContent = '🔊 Audio On';
+                audioToggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                audioToggleBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                audioControls.classList.remove('hidden');
+                showSuccess('Audio enabled! You can now hear the remote computer.');
+                
+                // Log current audio state
+                console.log('🔊 Current audio state:', {
+                    muted: remoteVideo.muted,
+                    volume: remoteVideo.volume,
+                    readyState: remoteVideo.readyState,
+                    paused: remoteVideo.paused
+                });
+                
+            }).catch(error => {
+                console.log('⚠️ Audio play failed:', error.message);
+                // Revert to muted state
+                remoteVideo.muted = true;
+                showError('Audio failed to start. Please try clicking again.');
+            });
+        } catch (error) {
+            console.error('❌ Error enabling audio:', error);
+            showError('Failed to enable audio');
+        }
+    } else {
+        console.log('🔇 Disabling audio...');
+        remoteVideo.muted = true;
+        audioToggleBtn.textContent = '🔇 Audio Off';
+        audioToggleBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+        audioToggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+        audioControls.classList.add('hidden');
+        showSuccess('Audio disabled');
+    }
+}
+
+// Enter fullscreen mode (tab-level, not system fullscreen)
+function enterFullscreen() {
+    if (!currentSessionId) {
+        showError('No active session to enter fullscreen');
+        return;
+    }
+    
+    console.log('🖥️ Entering tab-level fullscreen...');
+    
+    // Apply CSS fullscreen to the video container
+    const videoContainer = document.querySelector('.relative.bg-gray-900');
+    if (videoContainer) {
+        videoContainer.classList.add('fullscreen-mode');
+        console.log('✅ Tab-level fullscreen activated');
+        
+        // Update button text
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        if (fullscreenBtn) {
+            fullscreenBtn.textContent = 'Exit Fullscreen';
+            fullscreenBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            fullscreenBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+        }
+        
+        // Add ESC key listener for this fullscreen mode
+        document.addEventListener('keydown', handleFullscreenKeyDown);
+    }
+}
+
+// Handle fullscreen key events
+function handleFullscreenKeyDown(event) {
+    if (event.key === 'Escape') {
+        console.log('🔑 ESC key pressed, exiting fullscreen...');
+        exitFullscreen();
+    }
+}
+
+// Exit fullscreen mode
+function exitFullscreen() {
+    console.log('🚪 Exiting tab-level fullscreen...');
+    
+    // Remove CSS fullscreen from the video container
+    const videoContainer = document.querySelector('.relative.bg-gray-900');
+    if (videoContainer) {
+        videoContainer.classList.remove('fullscreen-mode');
+        console.log('✅ Tab-level fullscreen deactivated');
+        
+        // Update button text
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        if (fullscreenBtn) {
+            fullscreenBtn.textContent = 'Full Screen';
+            fullscreenBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+            fullscreenBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        }
+        
+        // Remove ESC key listener
+        document.removeEventListener('keydown', handleFullscreenKeyDown);
+    }
+}
+
+// Show play button overlay when autoplay is blocked
+function showPlayButtonOverlay() {
+    const playButtonOverlay = document.getElementById('play-button-overlay');
+    if (playButtonOverlay) {
+        playButtonOverlay.classList.remove('hidden');
+        console.log('🔒 Play button overlay shown');
+        
+        // Add click event to play button
+        const playBtn = document.getElementById('play-video-btn');
+        if (playBtn) {
+            playBtn.onclick = async () => {
+                try {
+                    console.log('🖱️ Play button clicked, attempting to play video...');
+                    await remoteVideo.play();
+                    console.log('✅ Video started playing after user interaction');
+                    hidePlayButtonOverlay();
+                } catch (error) {
+                    console.error('❌ Failed to play video after user interaction:', error);
+                }
+            };
+        }
+    }
+}
+
+// Hide play button overlay
+function hidePlayButtonOverlay() {
+    const playButtonOverlay = document.getElementById('play-button-overlay');
+    if (playButtonOverlay) {
+        playButtonOverlay.classList.add('hidden');
+        console.log('🔒 Play button overlay hidden');
+    }
 }
 
 // Update connection status
@@ -543,10 +819,10 @@ function handleKeyDown(event) {
         event.preventDefault();
     }
     
-    // Handle F11 for fullscreen
+    // Handle F11 for fullscreen (use browser fullscreen)
     if (event.key === 'F11') {
         event.preventDefault();
-        enterFullscreen();
+        // Let browser handle F11 fullscreen
         return;
     }
     
@@ -590,54 +866,6 @@ function ensureVideoPlayingOnce() {
   };
   window.addEventListener('click', tryPlay, true);
   window.addEventListener('keydown', tryPlay, true);
-}
-
-// Toggle audio on/off
-function toggleAudio() {
-    if (remoteVideo.muted) {
-        // Try to unmute - this requires user interaction
-        try {
-            remoteVideo.muted = false;
-            
-            // Try to play to ensure audio is active
-            remoteVideo.play().then(() => {
-                console.log('✅ Audio successfully enabled');
-                audioToggleBtn.textContent = '🔊 Audio On';
-                audioToggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
-                audioToggleBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-                audioControls.classList.remove('hidden');
-                showSuccess('Audio enabled! You can now hear the remote computer.');
-            }).catch(error => {
-                console.log('⚠️ Audio play failed:', error.message);
-                // Revert to muted state
-                remoteVideo.muted = true;
-                showError('Audio failed to start. Please try clicking again.');
-            });
-        } catch (error) {
-            console.error('❌ Error enabling audio:', error);
-            showError('Failed to enable audio');
-        }
-    } else {
-        remoteVideo.muted = true;
-        audioToggleBtn.textContent = '🔇 Audio Off';
-        audioToggleBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-        audioToggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
-        audioControls.classList.add('hidden');
-        showSuccess('Audio disabled');
-    }
-}
-
-// Enter fullscreen mode
-function enterFullscreen() {
-    if (!currentSessionId) {
-        showError('No active session to enter fullscreen');
-        return;
-    }
-    
-    // Redirect to fullscreen viewer with current session
-    const fullscreenUrl = new URL(window.location);
-    fullscreenUrl.pathname = '/viewer-fullscreen.html';
-    window.location.href = fullscreenUrl.toString();
 }
 
 // Initialize when DOM is loaded

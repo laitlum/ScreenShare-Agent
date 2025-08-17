@@ -13,6 +13,16 @@
             background: #000;
         }
         
+        /* True fullscreen mode */
+        body.fullscreen-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+        }
+        
         #remote-video {
             width: 100vw;
             height: 100vh;
@@ -47,24 +57,9 @@
             z-index: 1001;
         }
         
-        #exit-fullscreen {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            border: 1px solid white;
-            padding: 8px 12px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            z-index: 1001;
-            transition: all 0.2s;
-        }
+
         
-        #exit-fullscreen:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
+
         
         .hidden {
             display: none !important;
@@ -77,8 +72,9 @@
         <span id="status-text">Connecting...</span>
     </div>
     
-    <!-- Exit Fullscreen Button -->
-    <button id="exit-fullscreen" onclick="exitFullscreen()">Exit Fullscreen (F11)</button>
+
+    
+
     
     <!-- Fullscreen Overlay -->
     <div id="fullscreen-overlay">
