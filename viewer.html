@@ -59,16 +59,45 @@
             height: 100vh !important;
             z-index: 9999 !important;
             background: #000 !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         
         .fullscreen-mode video {
             width: 100vw !important;
             height: 100vh !important;
-            object-fit: contain !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
+        .fit-contain video { object-fit: contain !important; }
+        .fit-cover video { object-fit: cover !important; }
         
         .fullscreen-mode #play-hint {
             display: none !important;
+        }
+        
+        /* Ensure fullscreen doesn't affect page layout */
+        body.fullscreen-active {
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        /* Hide page elements during fullscreen */
+        .fullscreen-active header,
+        .fullscreen-active #connection-form,
+        .fullscreen-active #remote-screen-container > div:first-child,
+        .fullscreen-active #audio-controls,
+        .fullscreen-active #remote-control-instructions {
+            display: none !important;
+        }
+        
+        /* Force fullscreen container to be isolated */
+        .fullscreen-mode {
+            isolation: isolate !important;
+            contain: layout style paint !important;
         }
     </style>
 </head>
@@ -131,6 +160,13 @@
                                 Full Screen
                             </button>
                             <button 
+                                id="fit-mode-btn"
+                                class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                                title="Toggle between Fit (entire screen) and Fill (no black bars)"
+                            >
+                                Fill
+                            </button>
+                            <button 
                                 id="audio-toggle-btn" 
                                 class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors hidden"
                                 title="Toggle audio on/off"
@@ -147,7 +183,7 @@
                     </div>
                     
                     <!-- Video Element -->
-                    <div class="relative bg-gray-900 rounded-lg overflow-hidden">
+                    <div id="video-container" class="relative bg-gray-900 rounded-lg overflow-hidden fit-contain">
                         <video 
                             id="remote-video" 
                             autoplay 

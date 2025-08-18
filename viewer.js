@@ -25,6 +25,11 @@ const volumeValue = document.getElementById('volume-value');
 const audioInstructions = document.getElementById('audio-instructions');
 const fullscreenBtn = document.getElementById('fullscreen-btn');
 const audioToggleBtn = document.getElementById('audio-toggle-btn');
+const fitModeBtn = document.getElementById('fit-mode-btn');
+// Fullscreen state
+let originalVideoParent = null;
+let originalVideoNextSibling = null;
+let isTabFullscreen = false;
 
 // Initialize the viewer
 function init() {
@@ -36,6 +41,9 @@ function init() {
     console.log('👁️ Video overlay element:', videoOverlay);
     console.log('🖥️ Remote screen container:', remoteScreenContainer);
     
+    // Ensure we start in normal (non-fullscreen) layout
+    resetFullscreenStateOnLoad();
+    
     setupEventListeners();
     
     // Check if session ID is in URL
@@ -44,6 +52,31 @@ function init() {
     if (sessionId) {
         sessionInput.value = sessionId;
         connectToSession(sessionId);
+    }
+}
+
+// Ensure normal layout on initial load (no fullscreen)
+function resetFullscreenStateOnLoad() {
+    try {
+        document.body.classList.remove('fullscreen-active');
+        const fsEl = document.querySelector('.relative.bg-gray-900.fullscreen-mode');
+        const videoContainer = document.querySelector('.relative.bg-gray-900');
+        const remoteContainer = document.getElementById('remote-screen-container');
+        if (fsEl) fsEl.classList.remove('fullscreen-mode');
+        // If video container ended up under body (from previous state), move it back
+        if (videoContainer && remoteContainer && videoContainer.parentElement === document.body) {
+            remoteContainer.appendChild(videoContainer);
+        }
+        // Restore button state
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        if (fullscreenBtn) {
+            fullscreenBtn.textContent = 'Full Screen';
+            fullscreenBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+            fullscreenBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        }
+        isTabFullscreen = false;
+    } catch (e) {
+        console.log('⚠️ resetFullscreenStateOnLoad error:', e.message);
     }
 }
 
@@ -61,6 +94,9 @@ function setupEventListeners() {
     disconnectBtn.addEventListener('click', disconnect);
     fullscreenBtn.addEventListener('click', enterFullscreen);
     audioToggleBtn.addEventListener('click', toggleAudio);
+    if (fitModeBtn) {
+        fitModeBtn.addEventListener('click', toggleFitMode);
+    }
 
     // Handle Enter key in session input
     sessionInput.addEventListener('keypress', (e) => {
@@ -78,6 +114,22 @@ function setupEventListeners() {
         }
     });
 
+}
+// Toggle between Fit (contain) and Fill (cover)
+function toggleFitMode() {
+    const container = document.getElementById('video-container');
+    if (!container) return;
+    if (container.classList.contains('fit-contain')) {
+        container.classList.remove('fit-contain');
+        container.classList.add('fit-cover');
+        if (fitModeBtn) fitModeBtn.textContent = 'Fit';
+        showSuccess('Fill: uses all space (may crop)');
+    } else {
+        container.classList.remove('fit-cover');
+        container.classList.add('fit-contain');
+        if (fitModeBtn) fitModeBtn.textContent = 'Fill';
+        showSuccess('Fit: shows entire screen (may have black bars)');
+    }
 }
 
 // Connect to a session
@@ -592,30 +644,37 @@ function enterFullscreen() {
     }
     
     console.log('🖥️ Entering tab-level fullscreen...');
-    
-    // Apply CSS fullscreen to the video container
     const videoContainer = document.querySelector('.relative.bg-gray-900');
-    if (videoContainer) {
-        videoContainer.classList.add('fullscreen-mode');
-        console.log('✅ Tab-level fullscreen activated');
-        
-        // Update button text
-        const fullscreenBtn = document.getElementById('fullscreen-btn');
-        if (fullscreenBtn) {
-            fullscreenBtn.textContent = 'Exit Fullscreen';
-            fullscreenBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-            fullscreenBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
-        }
-        
-        // Add ESC key listener for this fullscreen mode
-        document.addEventListener('keydown', handleFullscreenKeyDown);
+    if (!videoContainer) return;
+
+    // Save original placement to restore later
+    originalVideoParent = videoContainer.parentNode;
+    originalVideoNextSibling = videoContainer.nextSibling;
+
+    // Move the existing video container to body and style it
+    videoContainer.classList.add('fullscreen-mode');
+    document.body.appendChild(videoContainer);
+    document.body.classList.add('fullscreen-active');
+    isTabFullscreen = true;
+
+    // Update button text
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if (fullscreenBtn) {
+        fullscreenBtn.textContent = 'Exit Fullscreen';
+        fullscreenBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        fullscreenBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
     }
+
+    // Add ESC key listener for this fullscreen mode
+    document.addEventListener('keydown', handleFullscreenKeyDown);
 }
 
 // Handle fullscreen key events
 function handleFullscreenKeyDown(event) {
     if (event.key === 'Escape') {
         console.log('🔑 ESC key pressed, exiting fullscreen...');
+        event.preventDefault();
+        event.stopPropagation();
         exitFullscreen();
     }
 }
@@ -623,24 +682,31 @@ function handleFullscreenKeyDown(event) {
 // Exit fullscreen mode
 function exitFullscreen() {
     console.log('🚪 Exiting tab-level fullscreen...');
-    
-    // Remove CSS fullscreen from the video container
-    const videoContainer = document.querySelector('.relative.bg-gray-900');
+    const videoContainer = document.querySelector('.relative.bg-gray-900.fullscreen-mode');
     if (videoContainer) {
+        // Restore element back to original parent
         videoContainer.classList.remove('fullscreen-mode');
-        console.log('✅ Tab-level fullscreen deactivated');
-        
-        // Update button text
-        const fullscreenBtn = document.getElementById('fullscreen-btn');
-        if (fullscreenBtn) {
-            fullscreenBtn.textContent = 'Full Screen';
-            fullscreenBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
-            fullscreenBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        if (originalVideoParent) {
+            if (originalVideoNextSibling) {
+                originalVideoParent.insertBefore(videoContainer, originalVideoNextSibling);
+            } else {
+                originalVideoParent.appendChild(videoContainer);
+            }
         }
-        
-        // Remove ESC key listener
-        document.removeEventListener('keydown', handleFullscreenKeyDown);
     }
+    document.body.classList.remove('fullscreen-active');
+    isTabFullscreen = false;
+
+    // Update button text
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if (fullscreenBtn) {
+        fullscreenBtn.textContent = 'Full Screen';
+        fullscreenBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+        fullscreenBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+    }
+
+    // Remove ESC key listener
+    document.removeEventListener('keydown', handleFullscreenKeyDown);
 }
 
 // Show play button overlay when autoplay is blocked

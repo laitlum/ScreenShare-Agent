@@ -482,14 +482,22 @@ async function startScreenCapture() {
                 id: primarySource.id
             });
             
-            // Try to get both video and audio in one call first (more reliable)
+                    // Try to get both video and audio in one call first (more reliable)
             console.log('🎯 Attempting combined video+audio capture...');
+            
+                    // Show user instructions for better screen selection
+            showStatus('🔍 IMPORTANT: Select the APPLICATION WINDOW (not the entire screen) to avoid black borders and recursive display', 'info');
+            
             try {
                 const combinedStream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
                         displaySurface: 'monitor',
                         logicalSurface: true,
-                        cursor: 'always'
+                        cursor: 'always',
+                        resizeMode: 'crop-and-scale',
+                        width: { ideal: 1920, max: 2560 },
+                        height: { ideal: 1080, max: 1440 },
+                        frameRate: { ideal: 30, max: 60 }
                     },
                     audio: {
                         echoCancellation: true,
@@ -511,6 +519,18 @@ async function startScreenCapture() {
                 console.log('🎬 Combined capture succeeded, checking tracks...');
                 const combinedAudioTracks = combinedStream.getAudioTracks();
                 const combinedVideoTracks = combinedStream.getVideoTracks();
+                
+                // Check if user selected the right screen area
+                const videoTrack = combinedVideoTracks[0];
+                if (videoTrack) {
+                    const settings = videoTrack.getSettings();
+                    console.log('📐 Video capture settings:', settings);
+                    
+                    // Warn if resolution is too low (might be entire screen)
+                    if (settings.width < 1200 || settings.height < 800) {
+                        showStatus('⚠️ Low resolution detected. Consider selecting a specific application window for better quality.', 'warning');
+                    }
+                }
                 
                 console.log(`🔊 Combined stream: ${combinedAudioTracks.length} audio, ${combinedVideoTracks.length} video tracks`);
                 
@@ -554,11 +574,11 @@ async function startScreenCapture() {
                     mandatory: {
                         chromeMediaSource: 'desktop',
                         chromeMediaSourceId: primarySource.id,
-                        minWidth: 640,
-                        maxWidth: 1920,
-                        minHeight: 480,
-                        maxHeight: 1080,
-                        maxFrameRate: 15
+                        minWidth: 1280,
+                        maxWidth: 2560,
+                        minHeight: 720,
+                        maxHeight: 1440,
+                        maxFrameRate: 30
                     }
                 }
             });
