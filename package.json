@@ -8,7 +8,10 @@
     "dev": "NODE_ENV=development electron .",
     "signaling": "node signaling-server.js",
     "viewer": "node http-server.js",
-    "dev:all": "concurrently \"npm run signaling\" \"npm run viewer\" \"npm run dev\""
+    "dev:all": "concurrently \"npm run signaling\" \"npm run viewer\" \"npm run dev\"",
+    "build": "electron-builder -mwl",
+    "build:mac": "electron-builder --mac dmg",
+    "build:win": "electron-builder --win nsis"
   },
   "engines": {
     "node": ">=18"
@@ -25,9 +28,40 @@
   "devDependencies": {
     "concurrently": "^8.2.2",
     "electron": "^28.0.0",
-    "@nut-tree-fork/nut-js": "^4.2.6"
+    "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "ws": "^8.14.2"
+    "ws": "^8.14.2",
+    "@nut-tree-fork/nut-js": "^4.2.6"
+  },
+  "build": {
+    "appId": "com.screenshare.app",
+    "productName": "ScreenShare",
+    "files": [
+      "**/*",
+      "!downloads/**",
+      "!database/**",
+      "!**/*.md",
+      "!**/test/**",
+      "!**/.git/**",
+      "!**/.github/**"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    }
   }
 }
