@@ -4,11 +4,14 @@
   "description": "Screen sharing application with remote control capabilities",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "node signaling-server.js",
     "dev": "NODE_ENV=development electron .",
     "signaling": "node signaling-server.js",
     "viewer": "node http-server.js",
     "dev:all": "concurrently \"npm run signaling\" \"npm run viewer\" \"npm run dev\""
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": [
     "electron",

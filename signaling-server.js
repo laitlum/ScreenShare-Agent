@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const url = require("url");
 
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Create HTTP server to serve viewer files
 const server = http.createServer((req, res) => {
@@ -83,7 +83,7 @@ const sessions = {};
 
 // Start the server on all network interfaces
 server.listen(PORT, '0.0.0.0', () => {
-  console.log('🚀 Combined HTTP + WebSocket server running on port 3000');
+  console.log(`🚀 Combined HTTP + WebSocket server running on port ${PORT}`);
   console.log(`📱 Local access: http://localhost:${PORT}`);
   console.log(`📱 Network access: http://YOUR_LOCAL_IP:${PORT}`);
   console.log(`🔗 Example session: http://localhost:${PORT}?session=D0AGEVHU`);
@@ -208,8 +208,8 @@ setInterval(() => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('✅ Combined server ready!');
-  console.log('🌐 Viewer available at: http://localhost:3000');
-  console.log('🔌 WebSocket signaling on: ws://localhost:3000');
+  console.log(`🌐 Viewer available at: http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket signaling on: ws://localhost:${PORT}`);
   console.log('📱 Mobile access: http://192.168.31.174:3000');
   console.log('🔓 Bound to all interfaces for mobile access');
 });
