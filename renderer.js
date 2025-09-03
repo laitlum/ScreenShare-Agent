@@ -1,30 +1,72 @@
-console.log('🔄 RENDERER.JS LOADED - New WebSocket Architecture');
+console.log('🔄 RENDERER.JS LOADED - Permanent Access Mode');
 
 let peerConnection = null;
 let localStream = null;
-let currentSessionId = null;
-let isSharing = false;
+let isAgentRunning = false;
+let deviceInfo = null;
+let backendWS = null;
+
+// Configuration
+const BACKEND_URL = 'http://localhost:3001';
+const BACKEND_WS_URL = 'ws://localhost:3001';
 
 // Initialize the application
 function init() {
-    console.log('🚀 Initializing application...');
+    console.log('🚀 Initializing permanent access application...');
+    loadDeviceInfo();
     setupEventListeners();
-    updateUI();
+    connectToBackend();
+}
+
+// Load device information
+async function loadDeviceInfo() {
+    try {
+        // Get device info from main process
+        if (window.electronAPI && window.electronAPI.getDeviceInfo) {
+            deviceInfo = await window.electronAPI.getDeviceInfo();
+        } else {
+            // Fallback device info
+            deviceInfo = {
+                name: require('os').hostname() || 'Unknown Device',
+                deviceId: generateDeviceId(),
+                platform: process.platform || 'unknown',
+                ipAddress: null,
+                macAddress: null
+            };
+        }
+        
+        updateDeviceDisplay();
+    } catch (error) {
+        console.error('❌ Failed to load device info:', error);
+        updateDeviceDisplay();
+    }
+}
+
+// Generate a unique device ID
+function generateDeviceId() {
+    return 'device_' + Math.random().toString(36).substr(2, 16) + Date.now().toString(36);
+}
+
+// Update device information display
+function updateDeviceDisplay() {
+    if (!deviceInfo) return;
+    
+    document.getElementById('device-name').textContent = deviceInfo.name || 'Unknown';
+    document.getElementById('device-id').textContent = deviceInfo.deviceId || 'Not generated';
+    document.getElementById('device-platform').textContent = deviceInfo.platform || 'Unknown';
 }
 
 // Setup event listeners
 function setupEventListeners() {
-    // Tab switching
-    document.getElementById('share-tab').addEventListener('click', () => switchTab('share'));
-    document.getElementById('permanent-tab').addEventListener('click', () => switchTab('permanent'));
-    
     // Action buttons
-    document.getElementById('start-sharing-btn').addEventListener('click', startSharing);
-    document.getElementById('stop-sharing-btn').addEventListener('click', stopSharing);
-    document.getElementById('copy-link-btn').addEventListener('click', copyLink);
+    document.getElementById('register-device-btn').addEventListener('click', registerDevice);
+    document.getElementById('start-agent-btn').addEventListener('click', startAgent);
+    document.getElementById('stop-agent-btn').addEventListener('click', stopAgent);
     
-    // Setup IPC event listeners
-    setupIPCEventListeners();
+    // Setup IPC event listeners if available
+    if (window.electronAPI) {
+        setupIPCEventListeners();
+    }
 }
 
 // Setup IPC event listeners
@@ -33,6 +75,23 @@ function setupIPCEventListeners() {
         console.error('❌ electronAPI not available');
         return;
     }
+
+    // Session events
+    window.electronAPI.onSessionCreated((event, data) => {
+        console.log('🤖 Session created in renderer:', data.sessionId);
+        currentSessionId = data.sessionId;
+        
+        // Initialize WebRTC peer connection
+        initializePeerConnection();
+        
+        updateUI();
+    });
+
+    // WebRTC offer creation request
+    window.electronAPI.onCreateWebRTCOffer((event, data) => {
+        console.log('📤 Creating WebRTC offer for session:', data.sessionId);
+        createAndSendOffer();
+    });
 
     // Viewer events
     window.electronAPI.onViewerJoined((event, data) => {
@@ -829,7 +888,7 @@ function stopSharing() {
 // Copy link to clipboard
 async function copyLink() {
     try {
-        const link = `http://localhost:3000?session=${currentSessionId}`;
+        const link = `http://localhost:3000/viewer?session=${currentSessionId}`;
         await navigator.clipboard.writeText(link);
         showStatus('Link copied to clipboard!', 'success');
     } catch (error) {
@@ -849,7 +908,7 @@ function updateUI() {
         startBtn.classList.add('hidden');
         stopBtn.classList.remove('hidden');
         copyBtn.classList.remove('hidden');
-        sessionLink.textContent = `http://localhost:3000?session=${currentSessionId}`;
+        sessionLink.textContent = `http://localhost:3000/viewer?session=${currentSessionId}`;
     } else {
         startBtn.classList.remove('hidden');
         stopBtn.classList.add('hidden');
@@ -891,6 +950,106 @@ function showStatus(message, type = 'info') {
     setTimeout(() => {
         statusElement.classList.add('translate-x-full');
     }, 3000);
+}
+
+// Initialize WebRTC peer connection
+function initializePeerConnection() {
+    if (peerConnection) {
+        console.log('🔄 Closing existing peer connection');
+        peerConnection.close();
+    }
+    
+    console.log('🔌 Initializing WebRTC peer connection');
+    peerConnection = new RTCPeerConnection({
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }
+        ]
+    });
+    
+    // Handle ICE candidates
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            console.log('🧊 Sending ICE candidate to viewer');
+            window.electronAPI.sendIceCandidate({
+                candidate: event.candidate
+            });
+        }
+    };
+    
+    // Handle connection state changes
+    peerConnection.onconnectionstatechange = () => {
+        console.log('🔗 Connection state:', peerConnection.connectionState);
+    };
+}
+
+// Create and send WebRTC offer
+async function createAndSendOffer() {
+    try {
+        if (!peerConnection) {
+            console.error('❌ PeerConnection not initialized');
+            return;
+        }
+        
+        console.log('📹 Getting screen stream...');
+        
+        // Get screen stream
+        const sources = await window.electronAPI.getDesktopSources({
+            types: ['screen'],
+            thumbnailSize: { width: 1920, height: 1080 }
+        });
+        
+        if (sources && sources.length > 0) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    mandatory: {
+                        chromeMediaSource: 'desktop',
+                        chromeMediaSourceId: sources[0].id,
+                        minWidth: 1280,
+                        maxWidth: 1920,
+                        minHeight: 720,
+                        maxHeight: 1080
+                    }
+                }
+            });
+            
+            console.log('✅ Got screen stream');
+            localStream = stream;
+            
+            // Add tracks to peer connection
+            stream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, stream);
+            });
+            
+            // Create offer
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            
+            // Debug: Log the offer structure
+            console.log('🔍 Created offer:', offer);
+            console.log('🔍 Offer type:', offer.type);
+            console.log('🔍 Offer SDP length:', offer.sdp?.length);
+            
+            // Convert RTCSessionDescription to plain object for IPC
+            const offerData = {
+                type: offer.type,
+                sdp: offer.sdp
+            };
+            
+            console.log('🔍 Serialized offer for IPC:', offerData);
+            
+            // Send offer via IPC
+            await window.electronAPI.sendWebRTCOffer(offerData);
+            
+            console.log('📤 WebRTC offer sent to viewer');
+            
+        } else {
+            console.error('❌ No screen sources available');
+        }
+        
+    } catch (error) {
+        console.error('❌ Failed to create and send offer:', error);
+    }
 }
 
 // Initialize when DOM is loaded

@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const url = require("url");
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8081;
 
 // Create HTTP server to serve viewer files
 const server = http.createServer((req, res) => {
@@ -81,6 +81,36 @@ const wss = new WebSocket.Server({ server });
 
 const sessions = {};
 
+// Click deduplication to prevent multiple identical clicks
+const recentClicks = new Map(); // Store recent clicks to prevent duplicates
+const CLICK_DEDUPE_WINDOW = 500; // 500ms window for deduplication
+
+function isClickDuplicate(sessionId, inputData) {
+  if (inputData.action !== 'mouseup') return false; // Only dedupe actual clicks
+  
+  const clickKey = `${sessionId}-${inputData.action}-${inputData.x}-${inputData.y}-${inputData.button}`;
+  const now = Date.now();
+  
+  if (recentClicks.has(clickKey)) {
+    const lastClickTime = recentClicks.get(clickKey);
+    if (now - lastClickTime < CLICK_DEDUPE_WINDOW) {
+      return true; // This is a duplicate click
+    }
+  }
+  
+  // Store this click and clean up old entries
+  recentClicks.set(clickKey, now);
+  
+  // Clean up old entries (older than the dedupe window)
+  for (const [key, time] of recentClicks.entries()) {
+    if (now - time > CLICK_DEDUPE_WINDOW) {
+      recentClicks.delete(key);
+    }
+  }
+  
+  return false;
+}
+
 // Start the server on all network interfaces
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Combined HTTP + WebSocket server running on port ${PORT}`);
@@ -98,7 +128,8 @@ wss.on("connection", (ws) => {
       console.log('📨 Received message:', data.type, 'for session:', data.sessionId);
       
       if (data.type === "create-session") {
-        const sessionId = generateSessionId();
+        // Use the provided sessionId or generate a new one
+        const sessionId = data.sessionId || generateSessionId();
         sessions[sessionId] = { agent: ws, viewer: null, createdAt: Date.now() };
         ws.sessionId = sessionId;
         ws.role = "agent";
@@ -106,7 +137,7 @@ wss.on("connection", (ws) => {
         console.log('🤖 Agent created session:', sessionId);
       }
       
-      if (data.type === "join-session" && sessions[data.sessionId]) {
+      if ((data.type === "join-session" || data.type === "join-device-session") && sessions[data.sessionId]) {
         sessions[data.sessionId].viewer = ws;
         ws.sessionId = data.sessionId;
         ws.role = "viewer";
@@ -115,6 +146,29 @@ wss.on("connection", (ws) => {
           sessions[data.sessionId].agent.send(JSON.stringify({ type: "viewer-joined", sessionId: data.sessionId }));
         }
         console.log('👁️ Viewer joined session:', data.sessionId);
+      }
+      
+      // Handle device session joining - viewer sends device ID, we need to find matching session
+      if (data.type === "join-device-session") {
+        // data.sessionId is something like "device-id_20250830224636"
+        // We need to find a session that matches this device ID
+        const deviceId = data.sessionId; // This is already "device-id_20250830224636"
+        console.log('🔍 Looking for device session with ID:', deviceId);
+        
+        if (sessions[deviceId]) {
+          sessions[deviceId].viewer = ws;
+          ws.sessionId = deviceId;
+          ws.role = "viewer";
+          ws.send(JSON.stringify({ type: "viewer-joined", sessionId: deviceId }));
+          if (sessions[deviceId].agent) {
+            sessions[deviceId].agent.send(JSON.stringify({ type: "viewer-joined", sessionId: deviceId }));
+          }
+          console.log('👁️ Viewer joined device session:', deviceId);
+        } else {
+          console.log('❌ Device session not found:', deviceId);
+          console.log('📋 Available sessions:', Object.keys(sessions));
+          ws.send(JSON.stringify({ type: "error", message: "Session not found" }));
+        }
       }
       
       if (data.type === "webrtc-offer" && sessions[data.sessionId]?.viewer) {
@@ -148,19 +202,37 @@ wss.on("connection", (ws) => {
       }
       
       if (data.type === "viewer-input" && sessions[data.sessionId]?.agent) {
-        sessions[data.sessionId].agent.send(JSON.stringify({
-          type: "input-event",
+        // Extract the actual input data from the nested inputData object
+        const inputData = data.inputData || data;
+        
+        // Check for duplicate clicks and skip if found
+        if (isClickDuplicate(data.sessionId, inputData)) {
+          console.log('🚫 Skipping duplicate click:', inputData.action, `(${inputData.x}, ${inputData.y})`);
+          return;
+        }
+        
+        // Debug: Log the raw input data (only for non-duplicates)
+        console.log('📨 Received message:', inputData.action, 'for session:', data.sessionId);
+        
+        const forwardMessage = {
+          type: "viewer-input",
           sessionId: data.sessionId,
-          action: data.action,
-          x: data.x,
-          y: data.y,
-          button: data.button,
-          key: data.key,
-          modifiers: data.modifiers,
-          remoteWidth: data.remoteWidth,
-          remoteHeight: data.remoteHeight
-        }));
-        console.log('🎮 Forwarded viewer input to agent:', data.action);
+          action: inputData.action,
+          inputType: inputData.type,
+          x: inputData.x,
+          y: inputData.y,
+          button: inputData.button,
+          key: inputData.key,
+          code: inputData.code,
+          ctrlKey: inputData.ctrlKey,
+          altKey: inputData.altKey,
+          shiftKey: inputData.shiftKey,
+          metaKey: inputData.metaKey,
+          remoteWidth: inputData.remoteWidth,
+          remoteHeight: inputData.remoteHeight
+        };
+        sessions[data.sessionId].agent.send(JSON.stringify(forwardMessage));
+        console.log('🎮 Forwarded viewer input to agent:', inputData.action || 'unknown action', inputData.type || 'unknown type');
       }
       
     } catch (error) {

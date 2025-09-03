@@ -32,9 +32,6 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Copy source code
 COPY --from=builder /app/signaling-server.js ./
-COPY --from=builder /app/http-server.js ./
-COPY --from=builder /app/viewer.html ./
-COPY --from=builder /app/viewer.js ./
 
 # Change ownership
 RUN chown -R screenshare:screenshare /app
@@ -43,7 +40,7 @@ RUN chown -R screenshare:screenshare /app
 USER screenshare
 
 # Expose ports
-EXPOSE 3000 3001
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
@@ -52,6 +49,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start both services using a startup script
-CMD ["sh", "-c", "node signaling-server.js & node http-server.js & wait"]
+# Start signaling server
+CMD ["node", "signaling-server.js"]
 

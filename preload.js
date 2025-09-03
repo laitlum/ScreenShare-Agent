@@ -20,9 +20,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createSession: () => ipcRenderer.invoke('create-session'),
   
   // WebRTC communication
-  sendOffer: (data) => ipcRenderer.invoke('send-offer', data),
-  sendAnswer: (data) => ipcRenderer.invoke('send-answer', data),
-  sendIce: (data) => ipcRenderer.invoke('send-ice', data),
+  sendWebRTCOffer: (data) => ipcRenderer.invoke('send-webrtc-offer', data),
+  sendWebRTCAnswer: (data) => ipcRenderer.invoke('send-webrtc-answer', data),
+  sendIceCandidate: (data) => ipcRenderer.invoke('send-ice-candidate', data),
   
   // Screen capture
   getDisplayMedia: () => ipcRenderer.invoke('get-display-media'),
@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   
   // Event listeners
+  onSessionCreated: (callback) => ipcRenderer.on('session-created', callback),
+  onCreateWebRTCOffer: (callback) => ipcRenderer.on('create-webrtc-offer', callback),
   onViewerJoined: (callback) => ipcRenderer.on('viewer-joined', callback),
   onViewerDisconnected: (callback) => ipcRenderer.on('viewer-disconnected', callback),
   onWebRTCOffer: (callback) => ipcRenderer.on('webrtc-offer', callback),
@@ -63,6 +65,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+  
+  // Device info
+  getDeviceInfo: () => ipcRenderer.invoke('get-device-info'),
+  
+  // Remote control
+  sendRemoteInput: (inputData) => ipcRenderer.invoke('send-remote-input', inputData),
+  
+  // Screen capture
+  getDesktopSources: (options) => ipcRenderer.invoke('get-desktop-sources', options),
   
   // Utility
   isAvailable: () => true,

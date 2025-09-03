@@ -5,6 +5,7 @@ const path = require("path");
 
 let mainWindow;
 let ws;
+let sessionId;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -105,26 +106,47 @@ app.on("activate", () => {
 ipcMain.handle("create-session", async () => {
   try {
     console.log('🔌 Creating WebSocket connection to signaling server...');
-    ws = new WebSocket("ws://127.0.0.1:3000");
+    ws = new WebSocket("ws://127.0.0.1:8081", {
+      family: 4  // Force IPv4
+    });
     
     return new Promise((resolve, reject) => {
       ws.on("open", () => {
         console.log('✅ WebSocket connected to signaling server');
-        ws.send(JSON.stringify({ type: "create-session" }));
+        const tempSessionId = Math.random().toString(36).substring(2, 10).toUpperCase();
+        ws.send(JSON.stringify({
+          type: 'create-session',
+          sessionId: tempSessionId
+        }));
       });
       
       ws.on("message", (msg) => {
         try {
           const data = JSON.parse(msg);
           console.log('📨 Received message:', data.type);
+          if (data.type === 'viewer-input') {
+            console.log('📨 Full viewer-input message:', JSON.stringify(data, null, 2));
+          }
           
           if (data.type === "session-created") {
             console.log('🤖 Session created:', data.sessionId);
+            
+            // Store the correct session ID from server
+            sessionId = data.sessionId;
+            
+            // Send session creation success to renderer
+            mainWindow.webContents.send('session-created', { sessionId: data.sessionId });
+            
             resolve(data.sessionId);
           }
           
-          if (data.type === "viewer-joined") {
-            console.log('👁️ Viewer joined session:', data.sessionId);
+          // When viewer joins, immediately create and send offer
+          if (data.type === 'viewer-joined') {
+            console.log('👁️ Viewer joined, creating WebRTC offer...');
+            
+            // Send message to renderer to handle screen capture and WebRTC
+            mainWindow.webContents.send('create-webrtc-offer', { sessionId: data.sessionId });
+            
             mainWindow.webContents.send('viewer-joined', data);
           }
           
@@ -151,6 +173,24 @@ ipcMain.handle("create-session", async () => {
           if (data.type === "input-event") {
             console.log('🎮 Received input event:', data.action);
             handleInput(data);
+          }
+          
+          if (data.type === "viewer-input") {
+            console.log('🎮 Received viewer input:', data.action, 'at', data.x, data.y);
+            console.log('🎮 Full viewer input data:', JSON.stringify(data, null, 2));
+            // Convert viewer-input to the format expected by handleInput
+            const inputData = {
+              action: data.action,
+              x: data.x,
+              y: data.y,
+              button: data.button,
+              key: data.key,
+              char: data.char,
+              modifiers: data.modifiers,
+              remoteWidth: data.remoteWidth,
+              remoteHeight: data.remoteHeight
+            };
+            handleInput(inputData);
           }
           
         } catch (error) {
@@ -265,9 +305,11 @@ ipcMain.handle("get-display-media", async () => {
 // IPC handler for getting desktop sources (fallback)
 ipcMain.handle("get-desktop-sources", async (event, options) => {
   try {
-    console.log('🔍 Getting desktop sources via main process...');
+    const types = options?.types || ['screen'];
+    console.log('🔍 Getting desktop sources via main process with types:', types);
+    
     const sources = await desktopCapturer.getSources({
-      types: ['screen'],
+      types: types,
       thumbnailSize: { width: 1920, height: 1080 },
       ...options
     });
@@ -285,21 +327,159 @@ ipcMain.handle("get-desktop-sources", async (event, options) => {
   }
 });
 
+// Handle WebRTC messages from renderer
+ipcMain.handle("send-webrtc-offer", async (event, offerData) => {
+  try {
+    console.log('🔍 Main received offer data:', offerData);
+    console.log('🔍 Offer data type:', offerData?.type);
+    console.log('🔍 Offer data SDP length:', offerData?.sdp?.length);
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const message = {
+        type: 'webrtc-offer',
+        sessionId: sessionId,
+        offer: offerData
+      };
+      console.log('🔍 Sending message to signaling server:', message);
+      ws.send(JSON.stringify(message));
+      console.log('📤 Sent WebRTC offer to viewer via signaling server');
+      return { success: true };
+    } else {
+      throw new Error('WebSocket not connected');
+    }
+  } catch (error) {
+    console.error('❌ Failed to send WebRTC offer:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle("send-webrtc-answer", async (event, answerData) => {
+  try {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'webrtc-answer',
+        sessionId: sessionId,
+        answer: answerData.answer
+      }));
+      console.log('📤 Sent WebRTC answer to viewer via signaling server');
+      return { success: true };
+    } else {
+      throw new Error('WebSocket not connected');
+    }
+  } catch (error) {
+    console.error('❌ Failed to send WebRTC answer:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle("send-ice-candidate", async (event, candidateData) => {
+  try {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'webrtc-ice',
+        sessionId: sessionId,
+        candidate: candidateData.candidate
+      }));
+      console.log('📤 Sent ICE candidate to viewer via signaling server');
+      return { success: true };
+    } else {
+      throw new Error('WebSocket not connected');
+    }
+  } catch (error) {
+    console.error('❌ Failed to send ICE candidate:', error);
+    throw error;
+  }
+});
+
+// Device information handler
+ipcMain.handle("get-device-info", async () => {
+  const os = require('os');
+  const { networkInterfaces } = os;
+  
+  try {
+    // Get network interfaces to find IP and MAC
+    const interfaces = networkInterfaces();
+    let ipAddress = 'Unknown';
+    let macAddress = 'Unknown';
+    
+    // Find the first non-internal interface
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if (!iface.internal && iface.family === 'IPv4') {
+          ipAddress = iface.address;
+          macAddress = iface.mac;
+          break;
+        }
+      }
+      if (ipAddress !== 'Unknown') break;
+    }
+    
+    return {
+      hostname: os.hostname(),
+      platform: os.platform(),
+      ipAddress: ipAddress,
+      macAddress: macAddress,
+      architecture: os.arch(),
+      type: os.type()
+    };
+  } catch (error) {
+    console.error('❌ Failed to get device info:', error);
+    return {
+      hostname: 'Unknown',
+      platform: process.platform,
+      ipAddress: 'Unknown',
+      macAddress: 'Unknown',
+      architecture: process.arch,
+      type: 'Unknown'
+    };
+  }
+});
+
+// Remote control input handler
+ipcMain.handle("send-remote-input", async (event, inputData) => {
+  try {
+    console.log('🎮 Received remote input via IPC:', inputData.action);
+    await handleInput(inputData);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error processing remote input:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Handle input events from viewer
 async function handleInput(data) {
   try {
     const { width, height } = screen.getPrimaryDisplay().bounds;
     console.log(`🖥️ Screen dimensions: ${width}x${height}`);
     
-    if (data.action === "mousemove") {
+    if (data.action === "mousemove" || data.action === "move") {
       console.log('🖱️ Processing mouse move:', data);
+      console.log(`🖱️ Move coordinates: (${data.x}, ${data.y})`);
+      console.log(`🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`);
       // If the viewer sent content pixel coords with remoteWidth/remoteHeight, scale to host
       await moveMouse(data.x, data.y, width, height, data.remoteWidth || width, data.remoteHeight || height);
     }
     
-    if (data.action === "click") {
-      console.log('🖱️ Processing mouse click:', data);
+    // Handle click events - ONLY execute on mouseup to prevent spam
+    if (data.action === "mouseup") {
+      console.log('🖱️ Processing mouse click (mouseup only):', data);
+      console.log(`🖱️ Click coordinates: (${data.x}, ${data.y})`);
+      console.log(`🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`);
+      console.log(`🖱️ Mac screen: ${width}x${height}`);
+      
+      // Move mouse to click coordinates first, then click
+      if (data.x !== undefined && data.y !== undefined) {
+        await moveMouse(data.x, data.y, width, height, data.remoteWidth || width, data.remoteHeight || height);
+      }
+      
       await clickMouse(data.button || 'left');
+      console.log(`✅ Single click executed successfully`);
+    }
+    
+    // Skip other mouse events to prevent multiple clicks
+    if (data.action === "mousedown" || data.action === "click") {
+      console.log(`⏸️ Ignoring ${data.action} - waiting for mouseup to prevent click spam`);
     }
     
     if (data.action === "type") {
