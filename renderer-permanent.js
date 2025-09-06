@@ -8,7 +8,7 @@ let backendWS = null;
 let userEmail = null;
 let jwtToken = null;
 let isAuthenticated = false;
-let sessionId = null;
+let currentSessionId = null;
 let sessionConnected = false;
 
 // Configuration
@@ -136,23 +136,44 @@ function setupIPCEventListeners() {
 async function handleDeviceSetup() {
     console.log('🚀 handleDeviceSetup called!');
     const emailInput = document.getElementById('user-email');
-    userEmail = emailInput.value.trim();
-    console.log('📧 Email input value:', userEmail);
+    const newEmail = emailInput.value.trim();
+    console.log('📧 Email input value:', newEmail);
     
-    if (!userEmail) {
+    if (!newEmail) {
         showMessage('Please enter an email address', 'error');
         return;
     }
     
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(userEmail)) {
+    if (!emailRegex.test(newEmail)) {
         showMessage('Please enter a valid email address', 'error');
         return;
     }
     
     try {
         updateStatus('Setting up device access...');
+        
+        // Check if email has changed and device is already registered
+        const emailChanged = userEmail && userEmail !== newEmail;
+        if (emailChanged && deviceInfo && deviceInfo.registered) {
+            console.log('📧 Email changed from', userEmail, 'to', newEmail);
+            console.log('🔄 Re-registering device with new owner...');
+            
+            // Stop current heartbeat
+            stopHeartbeat();
+            
+            // Reset device registration status
+            deviceInfo.registered = false;
+            deviceInfo.registered_device_id = null;
+            deviceInfo.id = null;
+            
+            // Update UI to show register button
+            updateUI();
+        }
+        
+        // Update user email
+        userEmail = newEmail;
         
         // Check if the user exists (try to find/create them)
         await findOrCreateUser(userEmail);
@@ -669,16 +690,16 @@ function initializeWebSocket() {
                 switch (data.type) {
                     case 'session-created':
                         console.log('✅ Agent session created successfully');
-                        sessionId = data.sessionId;
+                        currentSessionId = data.sessionId;
                         sessionConnected = true;
-                        console.log('💾 Session variables set:', { sessionId, sessionConnected });
+                        console.log('💾 Session variables set:', { currentSessionId, sessionConnected });
                         updateStatus('Remote session ready');
                         break;
                         
                     case 'viewer-joined':
                         console.log('🎉 Viewer connected - starting screen sharing');
                         updateStatus('Viewer connected - Starting screen share...');
-                        await startScreenShare(sessionId);
+                        await startScreenShare(currentSessionId);
                         break;
                         
                     case 'webrtc-answer':
@@ -1034,7 +1055,7 @@ async function startScreenShare(sessionId) {
                 ws.send(JSON.stringify({
                     type: 'webrtc-ice',
                     candidate: event.candidate,
-                    sessionId: sessionId,
+                    sessionId: currentSessionId,
                     target: 'viewer'
                 }));
             }
@@ -1049,7 +1070,7 @@ async function startScreenShare(sessionId) {
             ws.send(JSON.stringify({
                 type: 'webrtc-offer',
                 offer: offer,
-                sessionId: sessionId,
+                sessionId: currentSessionId,
                 target: 'viewer'
             }));
             console.log('✅ WebRTC offer sent to viewer');
