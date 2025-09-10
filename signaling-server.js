@@ -114,9 +114,14 @@ function isClickDuplicate(sessionId, inputData) {
 // Start the server on all network interfaces
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Combined HTTP + WebSocket server running on port ${PORT}`);
-  console.log(`📱 Local access: http://localhost:${PORT}`);
-  console.log(`📱 Network access: http://YOUR_LOCAL_IP:${PORT}`);
-  console.log(`🔗 Example session: http://localhost:${PORT}?session=D0AGEVHU`);
+  const environment = process.env.NODE_ENV || 'development';
+  if (environment === 'development') {
+    console.log(`📱 Local access: http://localhost:${PORT}`);
+    console.log(`📱 Network access: http://YOUR_LOCAL_IP:${PORT}`);
+    console.log(`🔗 Example session: http://localhost:${PORT}?session=D0AGEVHU`);
+  } else {
+    console.log(`📱 Production signaling server running on port ${PORT}`);
+  }
 });
 
 wss.on("connection", (ws) => {
@@ -280,8 +285,13 @@ setInterval(() => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('✅ Combined server ready!');
-  console.log(`🌐 Viewer available at: http://localhost:${PORT}`);
-  console.log(`🔌 WebSocket signaling on: ws://localhost:${PORT}`);
+  const environment = process.env.NODE_ENV || 'development';
+  if (environment === 'development') {
+    console.log(`🌐 Viewer available at: http://localhost:${PORT}`);
+    console.log(`🔌 WebSocket signaling on: ws://localhost:${PORT}`);
+  } else {
+    console.log(`🌐 Production signaling server ready on port ${PORT}`);
+  }
   console.log('📱 Mobile access: http://192.168.31.174:3000');
   console.log('🔓 Bound to all interfaces for mobile access');
 });

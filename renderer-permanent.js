@@ -1,4 +1,4 @@
-console.log('🔄 PERMANENT ACCESS RENDERER LOADED');
+console.log('🛡️ LAITLUM ANTIVIRUS AGENT LOADED');
 
 let peerConnection = null;
 let localStream = null;
@@ -10,17 +10,48 @@ let jwtToken = null;
 let isAuthenticated = false;
 let currentSessionId = null;
 let sessionConnected = false;
+let scanInProgress = false;
+let scanProgress = 0;
+let scanInterval = null;
+let isSignedIn = false;
+let lastScanTime = null;
 
-// Configuration
-const BACKEND_URL = 'http://localhost:3001';
-const BACKEND_WS_URL = 'ws://localhost:3001';
+// Configuration - Environment-based
+const config = require('./config');
+const BACKEND_URL = config.BACKEND_URL;
+const BACKEND_WS_URL = config.BACKEND_WS_URL;
 
 // Initialize the application
 function init() {
-    console.log('🚀 Initializing permanent access application...');
+    console.log('🚀 Initializing Laitlum Antivirus Agent...');
     loadDeviceInfo();
     setupEventListeners();
+    checkPersistentSession();
     updateStatus('Ready for authentication');
+}
+
+// Check for persistent session
+function checkPersistentSession() {
+    const savedEmail = localStorage.getItem('laitlum_user_email');
+    const savedDeviceId = localStorage.getItem('laitlum_device_id');
+    
+    if (savedEmail && savedDeviceId) {
+        console.log('🔄 Found persistent session for:', savedEmail);
+        userEmail = savedEmail;
+        deviceInfo = {
+            name: localStorage.getItem('laitlum_device_name') || 'Unknown Device',
+            deviceId: savedDeviceId,
+            platform: localStorage.getItem('laitlum_device_platform') || 'unknown',
+            ipAddress: 'Unknown',
+            macAddress: 'Unknown',
+            registered: true
+        };
+        
+        isSignedIn = true;
+        showMainInterface();
+        connectToBackend();
+        startHeartbeat();
+    }
 }
 
 // Load device information
@@ -86,14 +117,30 @@ function generateDeviceId() {
 function updateDeviceDisplay() {
     if (!deviceInfo) return;
     
-    document.getElementById('device-name').textContent = deviceInfo.name || 'Unknown';
-    document.getElementById('device-id').textContent = deviceInfo.deviceId || 'Not generated';
-    document.getElementById('device-platform').textContent = deviceInfo.platform || 'Unknown';
+    const deviceNameEl = document.getElementById('device-name');
+    const deviceIdEl = document.getElementById('device-id');
+    const devicePlatformEl = document.getElementById('device-platform');
+    
+    if (deviceNameEl) deviceNameEl.textContent = deviceInfo.name || 'Unknown';
+    if (deviceIdEl) deviceIdEl.textContent = deviceInfo.deviceId || 'Not generated';
+    if (devicePlatformEl) devicePlatformEl.textContent = deviceInfo.platform || 'Unknown';
 }
 
 // Setup event listeners
 function setupEventListeners() {
     console.log('🎛️ Setting up event listeners...');
+    
+    // Sign in button
+    const signinBtn = document.getElementById('signin-btn');
+    if (signinBtn) {
+        signinBtn.addEventListener('click', showSignInForm);
+    }
+    
+    // Logout button
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
     
     // Device setup
     const setupBtn = document.getElementById('setup-btn');
@@ -104,8 +151,11 @@ function setupEventListeners() {
         console.error('❌ setup-btn element not found!');
     }
     
-    // Action buttons
-    document.getElementById('register-device-btn').addEventListener('click', registerDevice);
+    // Scan button
+    const scanBtn = document.getElementById('scan-btn');
+    if (scanBtn) {
+        scanBtn.addEventListener('click', startScan);
+    }
     
     // Setup IPC event listeners if available
     if (window.electronAPI) {
@@ -140,14 +190,12 @@ async function handleDeviceSetup() {
     console.log('📧 Email input value:', newEmail);
     
     if (!newEmail) {
-        showMessage('Please enter an email address', 'error');
         return;
     }
     
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(newEmail)) {
-        showMessage('Please enter a valid email address', 'error');
         return;
     }
     
@@ -178,16 +226,266 @@ async function handleDeviceSetup() {
         // Check if the user exists (try to find/create them)
         await findOrCreateUser(userEmail);
         
-        // Show device setup UI
-        showDeviceSetupUI();
+        // Save persistent session
+        savePersistentSession();
+        
+        // Show main interface
+        showMainInterface();
         connectToBackend();
-        showMessage('Device setup complete! User can now access this device from the dashboard.', 'success');
+        startHeartbeat();
         
     } catch (error) {
         console.error('❌ Device setup failed:', error);
-        showMessage(`Setup failed: ${error.message}`, 'error');
         updateStatus('Setup failed');
     }
+}
+
+// Show sign in form
+function showSignInForm() {
+    document.getElementById('signin-section').classList.remove('hidden');
+    document.getElementById('main-interface').classList.add('hidden');
+}
+
+// Show main antivirus interface
+function showMainInterface() {
+    document.getElementById('signin-section').classList.add('hidden');
+    document.getElementById('main-interface').classList.remove('hidden');
+    
+    // Update UI elements
+    document.getElementById('signin-btn').classList.add('hidden');
+    document.getElementById('logout-btn').classList.remove('hidden');
+    
+    // Update status displays
+    updateStatusDisplays();
+    
+    // Update device info
+    if (deviceInfo) {
+        document.getElementById('device-name').textContent = deviceInfo.name || 'Unknown';
+        document.getElementById('device-platform').textContent = deviceInfo.platform || 'Unknown';
+        document.getElementById('device-connection-status').textContent = 'Online';
+    }
+}
+
+// Update status displays
+function updateStatusDisplays() {
+    // Update protection status
+    const protectionStatus = document.getElementById('protection-status');
+    if (protectionStatus) {
+        protectionStatus.textContent = 'Active';
+        protectionStatus.className = 'text-2xl font-bold text-secondary';
+    }
+    
+    // Update threat detection status
+    const threatStatus = document.getElementById('threat-status');
+    if (threatStatus) {
+        if (isAgentRunning && backendWS && backendWS.readyState === WebSocket.OPEN) {
+            threatStatus.textContent = 'Protected';
+            threatStatus.className = 'text-2xl font-bold text-secondary';
+        } else {
+            threatStatus.textContent = 'Scanning...';
+            threatStatus.className = 'text-2xl font-bold text-yellow-400';
+        }
+    }
+    
+    // Update last scan time
+    const lastScan = document.getElementById('last-scan');
+    if (lastScan) {
+        if (lastScanTime) {
+            const timeString = lastScanTime.toLocaleTimeString();
+            lastScan.textContent = timeString;
+            lastScan.className = 'text-2xl font-bold text-secondary';
+        } else {
+            lastScan.textContent = 'Never';
+            lastScan.className = 'text-2xl font-bold text-gray-300';
+        }
+    }
+}
+
+// Handle logout
+async function handleLogout() {
+    console.log('🚪 Logging out...');
+    
+    try {
+        // Call backend logout endpoint if we have user info
+        if (userEmail && deviceInfo) {
+            console.log('📡 Calling backend logout endpoint...');
+            
+            const response = await fetch(`${BACKEND_URL}/public/agent/logout`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: deviceInfo.clerkId || userEmail, // Use clerk_id if available, otherwise email
+                    device_id: deviceInfo.deviceId, // Include device_id for specific device logout
+                }),
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('✅ Backend logout successful:', result);
+            } else {
+                console.log('⚠️ Backend logout failed, but continuing with local logout');
+            }
+        }
+    } catch (error) {
+        console.log('⚠️ Backend logout error, but continuing with local logout:', error);
+    }
+    
+    // Clear persistent session
+    localStorage.removeItem('laitlum_user_email');
+    localStorage.removeItem('laitlum_device_id');
+    localStorage.removeItem('laitlum_device_name');
+    localStorage.removeItem('laitlum_device_platform');
+    
+    // Stop services
+    stopHeartbeat();
+    if (backendWS) {
+        backendWS.close();
+        backendWS = null;
+    }
+    
+    // Reset state
+    isSignedIn = false;
+    userEmail = null;
+    deviceInfo = null;
+    isAgentRunning = false;
+    lastScanTime = null;
+    
+    // Show sign in form
+    document.getElementById('signin-section').classList.remove('hidden');
+    document.getElementById('main-interface').classList.add('hidden');
+    document.getElementById('signin-btn').classList.remove('hidden');
+    document.getElementById('logout-btn').classList.add('hidden');
+    
+    // Clear email input
+    const emailInput = document.getElementById('user-email');
+    if (emailInput) {
+        emailInput.value = '';
+    }
+    
+    // Reset status displays
+    updateStatusDisplays();
+    
+    console.log('✅ Logout completed successfully');
+}
+
+// Save persistent session
+function savePersistentSession() {
+    if (userEmail && deviceInfo) {
+        localStorage.setItem('laitlum_user_email', userEmail);
+        localStorage.setItem('laitlum_device_id', deviceInfo.deviceId);
+        localStorage.setItem('laitlum_device_name', deviceInfo.name);
+        localStorage.setItem('laitlum_device_platform', deviceInfo.platform);
+        console.log('💾 Persistent session saved for:', userEmail);
+    }
+}
+
+// Start fake antivirus scan
+function startScan() {
+    if (scanInProgress) return;
+    
+    console.log('🔍 Starting antivirus scan...');
+    scanInProgress = true;
+    scanProgress = 0;
+    
+    // Hide scan button and show progress
+    document.getElementById('scan-btn').classList.add('hidden');
+    document.getElementById('scan-progress').classList.remove('hidden');
+    document.getElementById('scan-complete').classList.add('hidden');
+    
+    // Update scan status
+    updateScanStatus('Initializing deep system scan...', 0);
+    
+    // Start progress simulation (1 hour = 3600000ms, update every 5 seconds)
+    const totalDuration = 3600000; // 1 hour
+    const updateInterval = 5000; // 5 seconds
+    const progressIncrement = (updateInterval / totalDuration) * 100;
+    
+    scanInterval = setInterval(() => {
+        scanProgress += progressIncrement;
+        
+        if (scanProgress >= 100) {
+            scanProgress = 100;
+            completeScan();
+            return;
+        }
+        
+        // Update progress bar
+        const progressBar = document.getElementById('scan-bar');
+        const percentage = document.getElementById('scan-percentage');
+        const status = document.getElementById('scan-status');
+        const timeRemaining = document.getElementById('scan-time');
+        
+        if (progressBar) progressBar.style.width = scanProgress + '%';
+        if (percentage) percentage.textContent = Math.round(scanProgress) + '%';
+        
+        // Update status messages
+        const statusMessages = [
+            'Scanning system files...',
+            'Checking registry entries...',
+            'Analyzing network connections...',
+            'Scanning startup programs...',
+            'Checking browser extensions...',
+            'Analyzing running processes...',
+            'Scanning temporary files...',
+            'Checking system drivers...',
+            'Analyzing system logs...',
+            'Finalizing security analysis...'
+        ];
+        
+        const messageIndex = Math.floor((scanProgress / 100) * statusMessages.length);
+        if (status && messageIndex < statusMessages.length) {
+            status.textContent = statusMessages[messageIndex];
+        }
+        
+        // Update time remaining
+        const remainingMs = totalDuration - (scanProgress / 100) * totalDuration;
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        if (timeRemaining) {
+            timeRemaining.textContent = `Estimated time remaining: ${remainingMinutes} minutes`;
+        }
+        
+    }, updateInterval);
+}
+
+// Complete scan
+function completeScan() {
+    console.log('✅ Antivirus scan completed');
+    scanInProgress = false;
+    
+    if (scanInterval) {
+        clearInterval(scanInterval);
+        scanInterval = null;
+    }
+    
+    // Hide progress and show completion
+    document.getElementById('scan-progress').classList.add('hidden');
+    document.getElementById('scan-complete').classList.remove('hidden');
+    
+    // Update last scan time
+    const now = new Date();
+    lastScanTime = now;
+    const timeString = now.toLocaleTimeString();
+    document.getElementById('last-scan').textContent = timeString;
+    document.getElementById('last-scan').className = 'text-2xl font-bold text-secondary';
+    
+    // Show scan button again after 3 seconds
+    setTimeout(() => {
+        document.getElementById('scan-complete').classList.add('hidden');
+        document.getElementById('scan-btn').classList.remove('hidden');
+    }, 3000);
+}
+
+// Update scan status
+function updateScanStatus(message, progress) {
+    const status = document.getElementById('scan-status');
+    const percentage = document.getElementById('scan-percentage');
+    const progressBar = document.getElementById('scan-bar');
+    
+    if (status) status.textContent = message;
+    if (percentage) percentage.textContent = progress + '%';
+    if (progressBar) progressBar.style.width = progress + '%';
 }
 
 // Find or create user by email
@@ -250,6 +548,9 @@ function connectWebSocket() {
             console.log('✅ Backend WebSocket connected');
             updateStatus('Agent ready');
             
+            // Update status displays
+            updateStatusDisplays();
+            
             // Register device if not already done
             if (deviceInfo && !deviceInfo.registered) {
                 registerDeviceAutomatically();
@@ -269,12 +570,18 @@ function connectWebSocket() {
             console.log('🔌 Backend WebSocket disconnected');
             updateStatus('Disconnected from backend');
             
+            // Update status displays
+            updateStatusDisplays();
+            
             // Retry connection
             setTimeout(connectWebSocket, 3000);
         };
         
         backendWS.onerror = (error) => {
             console.error('❌ Backend WebSocket error:', error);
+            
+            // Update status displays
+            updateStatusDisplays();
         };
         
     } catch (error) {
@@ -305,12 +612,10 @@ function handleBackendMessage(data) {
 // Register device with backend
 async function registerDevice() {
     if (!userEmail) {
-        showMessage('Please setup device access first', 'error');
         return;
     }
     
     if (!deviceInfo) {
-        showMessage('Device info not loaded', 'error');
         return;
     }
 
@@ -348,7 +653,7 @@ async function registerDevice() {
             deviceInfo.id = result.device.id;
             
             updateStatus('Agent running - Ready for connections');
-            showMessage('Device registered successfully! Ready for remote connections.', 'success');
+            console.log('✅ Device registered successfully! Ready for remote connections.');
             showAgentRunning();
             updateUI();
             
@@ -359,7 +664,7 @@ async function registerDevice() {
         
     } catch (error) {
         console.error('❌ Device registration failed:', error);
-        showMessage(`Registration failed: ${error.message}`, 'error');
+        console.error('❌ Registration failed:', error.message);
         updateStatus('Registration failed');
     }
 }
@@ -374,8 +679,11 @@ async function registerDeviceAutomatically() {
 // Show agent running status
 function showAgentRunning() {
     // Hide register button and show status
-    document.getElementById('register-device-btn').style.display = 'none';
-    document.getElementById('agent-status').classList.remove('hidden');
+    const registerBtn = document.getElementById('register-device-btn');
+    const agentStatus = document.getElementById('agent-status');
+    
+    if (registerBtn) registerBtn.style.display = 'none';
+    if (agentStatus) agentStatus.classList.remove('hidden');
     
     // Start heartbeat to backend
     startHeartbeat();
@@ -457,7 +765,7 @@ function handleAccessRequest(requestData) {
     requestsSection.classList.remove('hidden');
     
     // Show notification
-    showMessage(`Access request from ${requestData.email}`, 'info');
+    console.log(`📨 Access request from ${requestData.email}`);
 }
 
 // Approve access request
@@ -472,14 +780,14 @@ async function approveAccessRequest(requestId) {
         });
 
         if (response.ok) {
-            showMessage('Access request approved', 'success');
+            console.log('✅ Access request approved');
             // Remove request from UI would go here
         } else {
             throw new Error('Failed to approve request');
         }
     } catch (error) {
         console.error('❌ Failed to approve access request:', error);
-        showMessage(`Failed to approve: ${error.message}`, 'error');
+        console.error('❌ Failed to approve:', error.message);
     }
 }
 
@@ -495,13 +803,13 @@ async function denyAccessRequest(requestId) {
         });
 
         if (response.ok) {
-            showMessage('Access request denied', 'info');
+            console.log('❌ Access request denied');
         } else {
             throw new Error('Failed to deny request');
         }
     } catch (error) {
         console.error('❌ Failed to deny access request:', error);
-        showMessage(`Failed to deny: ${error.message}`, 'error');
+        console.error('❌ Failed to deny:', error.message);
     }
 }
 
@@ -517,11 +825,11 @@ async function handlePermanentSession(sessionData) {
             await initializeScreenShare();
         }
         
-        showMessage('Remote session started', 'success');
+        console.log('✅ Remote session started');
         
     } catch (error) {
         console.error('❌ Failed to start permanent session:', error);
-        showMessage(`Session failed: ${error.message}`, 'error');
+        console.error('❌ Session failed:', error.message);
     }
 }
 
@@ -582,20 +890,29 @@ function updateUI() {
     const registerBtn = document.getElementById('register-device-btn');
     const agentStatus = document.getElementById('agent-status');
     
-    if (!deviceInfo || !deviceInfo.registered || !isAgentRunning) {
-        // Device not registered or agent not running - show register button
-        registerBtn.style.display = 'block';
-        agentStatus.classList.add('hidden');
-    } else {
-        // Agent running - show status
-        registerBtn.style.display = 'none';
-        agentStatus.classList.remove('hidden');
+    if (registerBtn) {
+        if (!deviceInfo || !deviceInfo.registered || !isAgentRunning) {
+            // Device not registered or agent not running - show register button
+            registerBtn.style.display = 'block';
+        } else {
+            // Agent running - hide register button
+            registerBtn.style.display = 'none';
+        }
+    }
+    
+    if (agentStatus) {
+        if (!deviceInfo || !deviceInfo.registered || !isAgentRunning) {
+            agentStatus.classList.add('hidden');
+        } else {
+            agentStatus.classList.remove('hidden');
+        }
     }
 }
 
 // Update status display
 function updateStatus(status) {
-    document.getElementById('device-status').textContent = `Status: ${status}`;
+    // Only log status updates, don't show error messages to user
+    console.log(`📊 Status: ${status}`);
 }
 
 // Update device status from backend
@@ -604,48 +921,11 @@ function updateDeviceStatus(statusData) {
     
     if (statusData.isOnline !== undefined) {
         const statusText = statusData.isOnline ? 'Online' : 'Offline';
-        document.getElementById('device-connection-status').textContent = statusText;
+        const statusElement = document.getElementById('device-connection-status');
+        if (statusElement) {
+            statusElement.textContent = statusText;
+        }
     }
-}
-
-// Show status message
-function showMessage(message, type = 'info') {
-    console.log(`📢 ${type.toUpperCase()}: ${message}`);
-    
-    // Create or update status message
-    let statusMsg = document.getElementById('status-message');
-    if (!statusMsg) {
-        statusMsg = document.createElement('div');
-        statusMsg.id = 'status-message';
-        statusMsg.className = 'fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg transition-transform duration-300 transform translate-x-full';
-        document.body.appendChild(statusMsg);
-    }
-    
-    // Set colors based on type
-    statusMsg.className = statusMsg.className.replace(/bg-\w+-\d+/, '');
-    switch (type) {
-        case 'success':
-            statusMsg.classList.add('bg-green-500');
-            break;
-        case 'error':
-            statusMsg.classList.add('bg-red-500');
-            break;
-        case 'info':
-        default:
-            statusMsg.classList.add('bg-blue-500');
-            break;
-    }
-    
-    statusMsg.textContent = message;
-    statusMsg.classList.add('text-white');
-    
-    // Show message
-    statusMsg.classList.remove('translate-x-full');
-    
-    // Hide after 3 seconds
-    setTimeout(() => {
-        statusMsg.classList.add('translate-x-full');
-    }, 3000);
 }
 
 // WebSocket connection for remote control
@@ -654,7 +934,7 @@ let ws = null;
 let isWebSocketConnected = false;
 
 // WebSocket server configuration
-const WS_SERVER_URL = 'ws://localhost:8081';
+const WS_SERVER_URL = config.WS_SERVER_URL;
 
 // Initialize WebSocket connection for remote control
 function initializeWebSocket() {
@@ -1143,8 +1423,12 @@ function stopScreenShare() {
 
 // Update the showAgentRunning function to also start WebSocket
 function showAgentRunning() {
-    document.getElementById('register-device-btn').style.display = 'none';
-    document.getElementById('agent-status').classList.remove('hidden');
+    const registerBtn = document.getElementById('register-device-btn');
+    const agentStatus = document.getElementById('agent-status');
+    
+    if (registerBtn) registerBtn.style.display = 'none';
+    if (agentStatus) agentStatus.classList.remove('hidden');
+    
     startHeartbeat();
     isAgentRunning = true;
     

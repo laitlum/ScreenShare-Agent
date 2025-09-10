@@ -6,11 +6,15 @@
   "scripts": {
     "start": "electron .",
     "dev": "NODE_ENV=development electron .",
+    "prod": "NODE_ENV=production electron .",
     "signaling": "node signaling-server.js",
+    "signaling:prod": "NODE_ENV=production node signaling-server.js",
     "dev:all": "concurrently \"npm run signaling\" \"npm run dev\"",
+    "prod:all": "concurrently \"npm run signaling:prod\" \"npm run prod\"",
     "build": "electron-builder -mwl",
     "build:mac": "electron-builder --mac dmg",
-    "build:win": "electron-builder --win nsis"
+    "build:win": "electron-builder --win nsis",
+    "build:prod": "NODE_ENV=production electron-builder -mwl"
   },
   "engines": {
     "node": ">=18"

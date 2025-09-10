@@ -6,9 +6,10 @@ let isAgentRunning = false;
 let deviceInfo = null;
 let backendWS = null;
 
-// Configuration
-const BACKEND_URL = 'http://localhost:3001';
-const BACKEND_WS_URL = 'ws://localhost:3001';
+// Configuration - Environment-based
+const config = require('./config');
+const BACKEND_URL = config.BACKEND_URL;
+const BACKEND_WS_URL = config.BACKEND_WS_URL;
 
 // Initialize the application
 function init() {

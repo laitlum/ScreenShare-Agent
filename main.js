@@ -11,6 +11,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: "Laitlum Antivirus - Advanced",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
