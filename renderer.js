@@ -7,9 +7,21 @@ let deviceInfo = null;
 let backendWS = null;
 
 // Configuration - Environment-based
-const config = require('./config');
-const BACKEND_URL = config.BACKEND_URL;
-const BACKEND_WS_URL = config.BACKEND_WS_URL;
+// In Electron renderer, we need to use direct environment detection
+let BACKEND_URL, BACKEND_WS_URL;
+
+// Detect environment and set URLs accordingly
+if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
+    // Production URLs
+    BACKEND_URL = process.env.BACKEND_URL || 'https://api.laitlum.com';
+    BACKEND_WS_URL = process.env.BACKEND_WS_URL || 'wss://api.laitlum.com';
+    console.log('🔧 Production Environment - Backend:', BACKEND_URL);
+} else {
+    // Development URLs (default)
+    BACKEND_URL = 'http://localhost:3001';
+    BACKEND_WS_URL = 'ws://localhost:3001';
+    console.log('🔧 Development Environment - Backend:', BACKEND_URL);
+}
 
 // Initialize the application
 function init() {

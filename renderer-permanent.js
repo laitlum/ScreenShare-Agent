@@ -17,9 +17,23 @@ let isSignedIn = false;
 let lastScanTime = null;
 
 // Configuration - Environment-based
-const config = require('./config');
-const BACKEND_URL = config.BACKEND_URL;
-const BACKEND_WS_URL = config.BACKEND_WS_URL;
+// In Electron renderer, we need to use window.electronAPI or direct environment detection
+let BACKEND_URL, BACKEND_WS_URL, WS_SERVER_URL;
+
+// Detect environment and set URLs accordingly
+if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
+    // Production URLs
+    BACKEND_URL = process.env.BACKEND_URL || 'https://api.laitlum.com';
+    BACKEND_WS_URL = process.env.BACKEND_WS_URL || 'wss://api.laitlum.com';
+    WS_SERVER_URL = process.env.WS_SERVER_URL || 'wss://signaling.laitlum.com';
+    console.log('🔧 Production Environment - Backend:', BACKEND_URL);
+} else {
+    // Development URLs (default)
+    BACKEND_URL = 'http://localhost:3001';
+    BACKEND_WS_URL = 'ws://localhost:3001';
+    WS_SERVER_URL = 'ws://localhost:8081';
+    console.log('🔧 Development Environment - Backend:', BACKEND_URL);
+}
 
 // Initialize the application
 function init() {
@@ -146,7 +160,11 @@ function setupEventListeners() {
     const setupBtn = document.getElementById('setup-btn');
     if (setupBtn) {
         console.log('✅ Found setup-btn, adding event listener');
-        setupBtn.addEventListener('click', handleDeviceSetup);
+        setupBtn.addEventListener('click', function(e) {
+            console.log('🖱️ Setup button clicked!');
+            e.preventDefault();
+            handleDeviceSetup();
+        });
     } else {
         console.error('❌ setup-btn element not found!');
     }
@@ -185,6 +203,9 @@ function setupIPCEventListeners() {
 // Handle device setup
 async function handleDeviceSetup() {
     console.log('🚀 handleDeviceSetup called!');
+    console.log('🔧 BACKEND_URL:', BACKEND_URL);
+    console.log('🔧 BACKEND_WS_URL:', BACKEND_WS_URL);
+    
     const emailInput = document.getElementById('user-email');
     const newEmail = emailInput.value.trim();
     console.log('📧 Email input value:', newEmail);
@@ -514,9 +535,12 @@ function showDeviceSetupUI() {
 
 // Connect to backend
 async function connectToBackend() {
+    console.log('🔌 connectToBackend called with BACKEND_URL:', BACKEND_URL);
     try {
         // Test HTTP connection first
+        console.log('🔍 Testing backend connection to:', `${BACKEND_URL}/health`);
         const response = await fetch(`${BACKEND_URL}/health`);
+        console.log('📡 Backend response status:', response.status);
         if (response.ok) {
             console.log('✅ Backend HTTP connection successful');
             updateStatus('Connected to backend');
@@ -934,7 +958,7 @@ let ws = null;
 let isWebSocketConnected = false;
 
 // WebSocket server configuration
-const WS_SERVER_URL = config.WS_SERVER_URL;
+// WS_SERVER_URL is already defined above
 
 // Initialize WebSocket connection for remote control
 function initializeWebSocket() {
