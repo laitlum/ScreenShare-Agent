@@ -1,17 +1,66 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen, systemPreferences } = require("electron");
+const runtimeConfig = require('./config');
 const WebSocket = require("ws");
 const { moveMouse, clickMouse, typeChar, pressKey } = require("./remoteControl");
 const path = require("path");
+const os = require('os');
 
 let mainWindow;
 let ws;
 let sessionId;
+let agentDeviceId;
+
+async function resolveAgentDeviceId() {
+  try {
+    // Allow override via env for development
+    if (process.env.LA_DEVICE_ID) {
+      console.log('Using device_id from env:', process.env.LA_DEVICE_ID);
+      return process.env.LA_DEVICE_ID;
+    }
+
+    const hostname = os.hostname();
+    console.log('Resolving device_id for host:', hostname);
+
+    const resp = await fetch('http://localhost:3002/api/devices', {
+      headers: {
+        // Dev-only header accepted by backend in debug mode
+        'X-User-Email': 'sattiramakrishna333@gmail.com'
+      }
+    });
+    if (!resp.ok) {
+      throw new Error(`devices api status ${resp.status}`);
+    }
+    const devices = await resp.json();
+    if (!Array.isArray(devices) || devices.length === 0) {
+      throw new Error('no devices found');
+    }
+
+    // Prefer a device that matches this host, else first active device
+    let matched = devices.find(d => (d?.device_name || d?.name || '').toLowerCase().includes(hostname.toLowerCase()));
+    if (!matched) {
+      matched = devices.find(d => d?.is_active) || devices[0];
+    }
+
+    console.log('Selected device record:', {
+      id: matched?.id,
+      device_id: matched?.device_id,
+      name: matched?.device_name || matched?.name
+    });
+    return matched?.device_id;
+  } catch (e) {
+    console.log('Failed to resolve device_id:', e?.message || e);
+    return undefined;
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: "Laitlum Antivirus - Advanced",
+    show: true,  // Force window to be visible
+    center: true,  // Center the window
+    alwaysOnTop: false,  // Don't keep on top
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -25,7 +74,31 @@ function createWindow() {
     },
   });
 
+  // The renderer uses renderer-permanent.js; a minimal HTML will attach to it.
   mainWindow.loadFile(path.join(__dirname, "renderer.html"));
+  
+  // Add event listeners for debugging
+  mainWindow.on('ready-to-show', () => {
+    console.log('✅ Window ready to show');
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.moveTop();
+  });
+  
+  mainWindow.on('show', () => {
+    console.log('✅ Window shown');
+  });
+  
+  mainWindow.on('focus', () => {
+    console.log('✅ Window focused');
+  });
+  
+  // Force show the window
+  mainWindow.show();
+  mainWindow.focus();
+  mainWindow.moveTop();
+  
+  console.log('✅ Window created and shown');
   
   // Open DevTools in development
   if (process.env.NODE_ENV === 'development') {
@@ -107,9 +180,25 @@ app.on("activate", () => {
 ipcMain.handle("create-session", async () => {
   try {
     console.log('🔌 Creating WebSocket connection to signaling server...');
-    ws = new WebSocket("ws://127.0.0.1:8081", {
-      family: 4  // Force IPv4
-    });
+
+    // Ensure we have the correct device_id for this agent so the backend can map viewer -> agent
+    if (!agentDeviceId) {
+      agentDeviceId = await resolveAgentDeviceId();
+    }
+    if (!agentDeviceId) {
+      throw new Error('Could not determine agent device_id');
+    }
+
+    // Build WS URL based on environment config
+    const baseWs = runtimeConfig.WS_SERVER_URL || `ws://127.0.0.1:8081/ws`;
+    const urlObj = new URL(baseWs);
+    // Ensure path is /ws and append query params
+    urlObj.searchParams.set('device_id', agentDeviceId);
+    urlObj.searchParams.set('role', 'agent');
+    const wsUrl = urlObj.toString();
+    console.log('Connecting to signaling WebSocket:', wsUrl);
+
+    ws = new WebSocket(wsUrl, { family: 4 });
     
     return new Promise((resolve, reject) => {
       ws.on("open", () => {
@@ -172,8 +261,9 @@ ipcMain.handle("create-session", async () => {
           }
           
           if (data.type === "input-event") {
-            console.log('🎮 Received input event:', data.action);
-            handleInput(data);
+            const payload = (data && typeof data.data === 'object' && data.data !== null) ? data.data : data;
+            console.log('🎮 Received input event:', payload.action);
+            handleInput(payload);
           }
           
           if (data.type === "viewer-input") {
@@ -439,11 +529,20 @@ ipcMain.handle("get-device-info", async () => {
 // Remote control input handler
 ipcMain.handle("send-remote-input", async (event, inputData) => {
   try {
-    console.log('🎮 Received remote input via IPC:', inputData.action);
+    // Safe console logging with error handling
+    try {
+      console.log('🎮 Received remote input via IPC:', inputData.action);
+    } catch (logError) {
+      // Ignore console logging errors
+    }
     await handleInput(inputData);
     return { success: true };
   } catch (error) {
-    console.error('❌ Error processing remote input:', error);
+    try {
+      console.error('❌ Error processing remote input:', error);
+    } catch (logError) {
+      // Ignore console logging errors
+    }
     return { success: false, error: error.message };
   }
 });
@@ -462,9 +561,9 @@ async function handleInput(data) {
       await moveMouse(data.x, data.y, width, height, data.remoteWidth || width, data.remoteHeight || height);
     }
     
-    // Handle click events - ONLY execute on mouseup to prevent spam
-    if (data.action === "mouseup") {
-      console.log('🖱️ Processing mouse click (mouseup only):', data);
+    // Handle click events - process both "click" and "mouseup" actions
+    if (data.action === "click" || data.action === "mouseup") {
+      console.log('🖱️ Processing mouse click:', data);
       console.log(`🖱️ Click coordinates: (${data.x}, ${data.y})`);
       console.log(`🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`);
       console.log(`🖱️ Mac screen: ${width}x${height}`);
@@ -475,12 +574,12 @@ async function handleInput(data) {
       }
       
       await clickMouse(data.button || 'left');
-      console.log(`✅ Single click executed successfully`);
+      console.log(`✅ Click executed successfully at (${data.x}, ${data.y})`);
     }
     
-    // Skip other mouse events to prevent multiple clicks
-    if (data.action === "mousedown" || data.action === "click") {
-      console.log(`⏸️ Ignoring ${data.action} - waiting for mouseup to prevent click spam`);
+    // Skip mousedown to prevent multiple clicks
+    if (data.action === "mousedown") {
+      console.log(`⏸️ Ignoring ${data.action} - preventing duplicate clicks`);
     }
     
     if (data.action === "type") {

@@ -13,13 +13,13 @@ let BACKEND_URL, BACKEND_WS_URL;
 // Detect environment and set URLs accordingly
 if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
     // Production URLs
-    BACKEND_URL = process.env.BACKEND_URL || 'https://api.laitlum.com';
-    BACKEND_WS_URL = process.env.BACKEND_WS_URL || 'wss://api.laitlum.com';
+    BACKEND_URL = process.env.BACKEND_URL || 'https://your-heroku-backend.herokuapp.com';
+    BACKEND_WS_URL = process.env.BACKEND_WS_URL || 'wss://your-heroku-backend.herokuapp.com';
     console.log('🔧 Production Environment - Backend:', BACKEND_URL);
 } else {
     // Development URLs (default)
     BACKEND_URL = 'http://localhost:3001';
-    BACKEND_WS_URL = 'ws://localhost:3001';
+    BACKEND_WS_URL = 'ws://localhost:8081/ws';
     console.log('🔧 Development Environment - Backend:', BACKEND_URL);
 }
 

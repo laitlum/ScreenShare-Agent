@@ -1,7 +1,7 @@
 {
-  "name": "electron-remote",
+  "name": "laitlum-agent",
   "version": "1.0.0",
-  "description": "Screen sharing application with remote control capabilities",
+  "description": "Laitlum remote access agent with screen sharing capabilities",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -13,7 +13,10 @@
     "prod:all": "concurrently \"npm run signaling:prod\" \"npm run prod\"",
     "build": "electron-builder -mwl",
     "build:mac": "electron-builder --mac dmg",
+    "build:mac-zip": "electron-builder --mac zip",
     "build:win": "electron-builder --win nsis",
+    "build:win-portable": "electron-builder --win portable",
+    "build:win-zip": "electron-builder --win zip",
     "build:prod": "NODE_ENV=production electron-builder -mwl"
   },
   "engines": {
@@ -21,8 +24,8 @@
   },
   "keywords": [
     "electron",
-    "screen-sharing",
-    "remote-control",
+    "laitlum",
+    "remote-access",
     "webrtc",
     "websocket"
   ],
@@ -30,16 +33,16 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "electron": "^28.0.0",
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "ws": "^8.14.2",
-    "@nut-tree-fork/nut-js": "^4.2.6"
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "electron": "^18.3.15",
+    "ws": "^8.14.2"
   },
   "build": {
-    "appId": "com.screenshare.app",
-    "productName": "ScreenShare",
+    "appId": "com.laitlum.app",
+    "productName": "Laitlum",
     "files": [
       "**/*",
       "!downloads/**",
@@ -53,18 +56,55 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "gatekeeperAssess": false,
+      "hardenedRuntime": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
-      ]
+      ],
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": false,
+      "signDlls": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false
     }
   }
 }

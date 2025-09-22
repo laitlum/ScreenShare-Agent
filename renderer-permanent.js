@@ -3,6 +3,9 @@ console.log('🛡️ LAITLUM ANTIVIRUS AGENT LOADED');
 let peerConnection = null;
 let localStream = null;
 let isAgentRunning = false;
+let remoteAnswerApplied = false;
+let applyingRemoteAnswer = false;
+let pendingIceCandidates = [];
 let deviceInfo = null;
 let backendWS = null;
 let userEmail = null;
@@ -23,15 +26,15 @@ let BACKEND_URL, BACKEND_WS_URL, WS_SERVER_URL;
 // Detect environment and set URLs accordingly
 if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
     // Production URLs
-    BACKEND_URL = process.env.BACKEND_URL || 'https://api.laitlum.com';
-    BACKEND_WS_URL = process.env.BACKEND_WS_URL || 'wss://api.laitlum.com';
-    WS_SERVER_URL = process.env.WS_SERVER_URL || 'wss://signaling.laitlum.com';
+    BACKEND_URL = process.env.BACKEND_URL || 'https://your-heroku-backend.herokuapp.com';
+    BACKEND_WS_URL = process.env.BACKEND_WS_URL || 'wss://your-heroku-backend.herokuapp.com';
+    WS_SERVER_URL = process.env.WS_SERVER_URL || 'wss://your-heroku-backend.herokuapp.com';
     console.log('🔧 Production Environment - Backend:', BACKEND_URL);
 } else {
     // Development URLs (default)
-    BACKEND_URL = 'http://localhost:3001';
-    BACKEND_WS_URL = 'ws://localhost:3001';
-    WS_SERVER_URL = 'ws://localhost:8081';
+    BACKEND_URL = 'http://localhost:3002';
+    BACKEND_WS_URL = 'ws://localhost:8081/ws';
+    WS_SERVER_URL = 'ws://localhost:8081/ws';
     console.log('🔧 Development Environment - Backend:', BACKEND_URL);
 }
 
@@ -45,26 +48,50 @@ function init() {
 }
 
 // Check for persistent session
-function checkPersistentSession() {
-    const savedEmail = localStorage.getItem('laitlum_user_email');
+async function checkPersistentSession() {
     const savedDeviceId = localStorage.getItem('laitlum_device_id');
-    
-    if (savedEmail && savedDeviceId) {
-        console.log('🔄 Found persistent session for:', savedEmail);
-        userEmail = savedEmail;
+    const savedEmail = localStorage.getItem('laitlum_user_email');
+    const savedName = localStorage.getItem('laitlum_device_name');
+    const savedPlatform = localStorage.getItem('laitlum_device_platform');
+
+    if (!savedDeviceId && savedEmail) {
+        // Backward-compat: fall back to generated device_id
+        const fallback = localStorage.getItem('device_id');
+        if (fallback) {
+            localStorage.setItem('laitlum_device_id', fallback);
+        }
+    }
+
+    if (savedDeviceId && savedEmail) {
+        console.log('🔄 Restoring persistent session for:', savedEmail, 'device:', savedDeviceId);
+        // Optional health check; do not block restore in local/dev
+        try {
+            const health = await fetch(`${BACKEND_URL}/health`);
+            if (health.ok) updateStatus('Backend reachable, restoring session');
+        } catch (e) {
+            console.log('⚠️ Skipping health check during restore:', e.message);
+        }
+
+        // Rehydrate minimal deviceInfo and UI
         deviceInfo = {
-            name: localStorage.getItem('laitlum_device_name') || 'Unknown Device',
+            name: savedName || (deviceInfo && deviceInfo.name) || 'Unknown Device',
             deviceId: savedDeviceId,
-            platform: localStorage.getItem('laitlum_device_platform') || 'unknown',
-            ipAddress: 'Unknown',
-            macAddress: 'Unknown',
+            platform: savedPlatform || (deviceInfo && deviceInfo.platform) || 'unknown',
+            ipAddress: (deviceInfo && deviceInfo.ipAddress) || 'Unknown',
+            macAddress: (deviceInfo && deviceInfo.macAddress) || 'Unknown',
             registered: true
         };
-        
-        isSignedIn = true;
+        userEmail = savedEmail;
+        isAuthenticated = true;
+        if (document.getElementById('user-email')) {
+            document.getElementById('user-email').value = savedEmail;
+        }
+        updateDeviceDisplay();
         showMainInterface();
         connectToBackend();
         startHeartbeat();
+        updateStatus('Agent running - Ready for connections');
+        return;
     }
 }
 
@@ -156,7 +183,7 @@ function setupEventListeners() {
         logoutBtn.addEventListener('click', handleLogout);
     }
     
-    // Device setup
+    // Device setup (optional element in minimal UI)
     const setupBtn = document.getElementById('setup-btn');
     if (setupBtn) {
         console.log('✅ Found setup-btn, adding event listener');
@@ -165,8 +192,6 @@ function setupEventListeners() {
             e.preventDefault();
             handleDeviceSetup();
         });
-    } else {
-        console.error('❌ setup-btn element not found!');
     }
     
     // Scan button
@@ -221,7 +246,7 @@ async function handleDeviceSetup() {
     }
     
     try {
-        updateStatus('Setting up device access...');
+        updateStatus('Setting up security protection...');
         
         // Check if email has changed and device is already registered
         const emailChanged = userEmail && userEmail !== newEmail;
@@ -247,11 +272,61 @@ async function handleDeviceSetup() {
         // Check if the user exists (try to find/create them)
         await findOrCreateUser(userEmail);
         
+        // Ensure deviceInfo is initialized before registration
+        if (!deviceInfo) {
+            console.log('🔄 Initializing deviceInfo...');
+            await initializeDeviceInfo();
+        }
+        
+        // Check if device is already registered with this email
+        const savedDeviceId = localStorage.getItem('laitlum_device_id');
+        if (savedDeviceId && !emailChanged) {
+            console.log('🔍 Checking if device is already registered with this email...');
+            try {
+                const response = await fetch(`${BACKEND_URL}/public/devices/${savedDeviceId}/session`);
+                const data = await response.json();
+                
+                if (data.has_active_session && data.owner && data.owner.email === newEmail) {
+                    console.log('✅ Device already registered with this email, restoring session');
+                    
+                    // Restore the session without re-registering
+                    userEmail = newEmail;
+                    deviceInfo = {
+                        name: localStorage.getItem('laitlum_device_name') || 'Unknown Device',
+                        deviceId: savedDeviceId,
+                        platform: localStorage.getItem('laitlum_device_platform') || 'unknown',
+                        ipAddress: 'Unknown',
+                        macAddress: 'Unknown',
+                        registered: true
+                    };
+                    
+                    // Save the email to localStorage
+                    localStorage.setItem('laitlum_user_email', newEmail);
+                    
+                    isSignedIn = true;
+                    showMainInterface();
+                    connectToBackend();
+                    startHeartbeat();
+                    updateStatus('Agent running - Ready for connections');
+                    console.log('✅ Session restored successfully!');
+                    return;
+                }
+            } catch (error) {
+                console.log('⚠️ Could not check existing session:', error.message);
+            }
+        }
+        
         // Save persistent session
         savePersistentSession();
         
         // Show main interface
         showMainInterface();
+        
+        // Register device with backend
+        console.log('🔄 About to call registerDevice()...');
+        await registerDevice();
+        console.log('✅ registerDevice() completed');
+        
         connectToBackend();
         startHeartbeat();
         
@@ -514,12 +589,51 @@ async function findOrCreateUser(email) {
     try {
         // For now, we'll just store the email locally
         // In a real system, you might sync with the backend
-        console.log(`📧 Setting up access for: ${email}`);
+        console.log(`📧 Setting up protection for: ${email}`);
         userEmail = email;
         isAuthenticated = true; // Mark as "authenticated" for local use
         return { email: email };
     } catch (error) {
         throw new Error(`Failed to setup user: ${error.message}`);
+    }
+}
+
+// Initialize device info (same logic as in initializeApp)
+async function initializeDeviceInfo() {
+    try {
+        if (window.electronAPI && window.electronAPI.getDeviceInfo) {
+            const systemInfo = await window.electronAPI.getDeviceInfo();
+            deviceInfo = {
+                name: systemInfo.hostname || navigator.platform || 'Unknown Device',
+                deviceId: generateDeviceId(),
+                platform: systemInfo.platform || navigator.platform || 'unknown',
+                ipAddress: systemInfo.ipAddress || 'Unknown',
+                macAddress: systemInfo.macAddress || 'Unknown'
+            };
+            console.log('📱 Device info loaded from system:', deviceInfo);
+        } else {
+            console.warn('⚠️ Could not get system info, using fallback');
+            // Fallback device info
+            deviceInfo = {
+                name: navigator.platform || 'Unknown Device',
+                deviceId: generateDeviceId(),
+                platform: navigator.platform || 'unknown',
+                ipAddress: 'Unknown',
+                macAddress: 'Unknown'
+            };
+        }
+        console.log('✅ deviceInfo initialized:', deviceInfo);
+    } catch (error) {
+        console.warn('⚠️ Could not initialize device info:', error);
+        // Fallback device info since we may not have OS module in renderer
+        deviceInfo = {
+            name: navigator.platform || 'Unknown Device',
+            deviceId: generateDeviceId(),
+            platform: navigator.platform || 'unknown',
+            ipAddress: 'Unknown',
+            macAddress: 'Unknown'
+        };
+        console.log('📱 Fallback device info:', deviceInfo);
     }
 }
 
@@ -565,12 +679,29 @@ function connectWebSocket() {
         return;
     }
 
+    // Ensure deviceInfo is available before connecting
+    if (!deviceInfo) {
+        console.log('⚠️ Device info not available, waiting...');
+        setTimeout(connectWebSocket, 1000);
+        return;
+    }
+
     try {
-        backendWS = new WebSocket(`${BACKEND_WS_URL}/ws`);
+        const deviceId = deviceInfo?.registered_device_id || deviceInfo?.deviceId;
+        if (!deviceId) {
+            console.log('⚠️ Device ID not available, waiting...');
+            setTimeout(connectWebSocket, 1000);
+            return;
+        }
+        
+        const wsUrl = `${BACKEND_WS_URL}?device_id=${deviceId}`;
+        console.log('🔌 Connecting to backend WebSocket:', wsUrl);
+        console.log('🔍 Device info:', deviceInfo);
+        backendWS = new WebSocket(wsUrl);
         
         backendWS.onopen = () => {
             console.log('✅ Backend WebSocket connected');
-            updateStatus('Agent ready');
+            updateStatus('Connected to backend - Session created automatically');
             
             // Update status displays
             updateStatusDisplays();
@@ -578,6 +709,10 @@ function connectWebSocket() {
             // Register device if not already done
             if (deviceInfo && !deviceInfo.registered) {
                 registerDeviceAutomatically();
+            } else if (deviceInfo && deviceInfo.registered) {
+                // Device already registered, initialize signaling WebSocket
+                console.log('🔌 Device already registered, initializing signaling WebSocket...');
+                initializeWebSocket();
             }
         };
         
@@ -615,7 +750,7 @@ function connectWebSocket() {
 }
 
 // Handle messages from backend
-function handleBackendMessage(data) {
+async function handleBackendMessage(data) {
     console.log('📨 Backend message:', data);
     
     switch (data.type) {
@@ -628,6 +763,88 @@ function handleBackendMessage(data) {
         case 'device_status':
             updateDeviceStatus(data.data);
             break;
+        case 'viewer-joined':
+            console.log('🎉 Viewer joined via backend WebSocket - starting screen sharing');
+            updateStatus('Viewer connected - Starting screen share...');
+            // Forward to signaling WebSocket handler
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'viewer-joined',
+                    data: data.data
+                }));
+            }
+            break;
+        case 'webrtc-offer':
+            console.log('📝 Received WebRTC offer from backend');
+            // Forward to signaling WebSocket handler
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'webrtc-offer',
+                    data: {
+                        offer: data.offer,
+                        sessionId: data.sessionId,
+                        target: 'agent'
+                    }
+                }));
+            }
+            break;
+        case 'webrtc-answer':
+            console.log('📝 Received WebRTC answer from backend');
+            // Forward to signaling WebSocket handler
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'webrtc-answer',
+                    data: {
+                        answer: data.answer,
+                        sessionId: data.sessionId,
+                        target: 'agent'
+                    }
+                }));
+            }
+            break;
+        case 'webrtc-ice':
+            console.log('🧊 Received ICE candidate from backend');
+            try {
+                const payload = (data && typeof data.data === 'object' && data.data !== null) ? data.data : data;
+                const candidate = payload?.candidate || payload;
+                if (candidate && peerConnection && peerConnection.remoteDescription) {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log('✅ ICE candidate added from backend->viewer path');
+                } else {
+                    // Fallback to routing through ws as before if needed
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'webrtc-ice', data: { candidate, sessionId: payload?.sessionId } }));
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Error handling ICE from backend:', e, data);
+            }
+            break;
+        case 'viewer-input':
+            console.log('🖱️ Received viewer input from backend');
+            // Forward to signaling WebSocket handler
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'viewer-input',
+                    data: {
+                        action: data.input?.action,
+                        x: data.input?.x,
+                        y: data.input?.y,
+                        button: data.input?.button,
+                        key: data.input?.key,
+                        char: data.input?.char,
+                        modifiers: data.input?.modifiers,
+                        remoteWidth: data.input?.remoteWidth,
+                        remoteHeight: data.input?.remoteHeight,
+                        sessionId: data.sessionId
+                    }
+                }));
+            }
+            break;
+        case 'session-error':
+            console.error('❌ Session error from backend:', data.data?.error || 'Unknown session error');
+            updateStatus('Session error - Check connection');
+            break;
         default:
             console.log('📝 Unknown backend message type:', data.type);
     }
@@ -635,11 +852,17 @@ function handleBackendMessage(data) {
 
 // Register device with backend
 async function registerDevice() {
+    console.log('🚀 registerDevice() called');
+    console.log('📧 userEmail:', userEmail);
+    console.log('📱 deviceInfo:', deviceInfo);
+    
     if (!userEmail) {
+        console.log('❌ No userEmail, returning early');
         return;
     }
     
     if (!deviceInfo) {
+        console.log('❌ No deviceInfo, returning early');
         return;
     }
 
@@ -655,6 +878,8 @@ async function registerDevice() {
             agent_version: "1.0.0",
             owner_email: userEmail
         };
+        
+        console.log('📤 Sending registration data:', registrationData);
 
         const response = await fetch(`${BACKEND_URL}/public/agent/register`, {
             method: 'POST',
@@ -666,7 +891,7 @@ async function registerDevice() {
 
         if (response.ok) {
             const result = await response.json();
-            console.log('✅ Device registered successfully:', result);
+            console.log('✅ Device registration result:', result);
             
             deviceInfo.registered = true;
             // Store the database device ID for session creation
@@ -676,10 +901,20 @@ async function registerDevice() {
             }
             deviceInfo.id = result.device.id;
             
+            // Save device info to localStorage for persistence
+            localStorage.setItem('laitlum_device_id', deviceInfo.deviceId);
+            localStorage.setItem('laitlum_device_name', deviceInfo.name);
+            localStorage.setItem('laitlum_device_platform', deviceInfo.platform);
+            localStorage.setItem('laitlum_user_email', userEmail);
+            
             updateStatus('Agent running - Ready for connections');
             console.log('✅ Device registered successfully! Ready for remote connections.');
             showAgentRunning();
             updateUI();
+            
+            // Initialize WebSocket connection for signaling
+            console.log('🔌 Initializing WebSocket connection for signaling...');
+            initializeWebSocket();
             
         } else {
             const error = await response.text();
@@ -967,34 +1202,53 @@ function initializeWebSocket() {
         return;
     }
 
-    const sessionId = `device-${deviceInfo.registered_device_id || deviceInfo.deviceId}`;
-    console.log('🔌 Connecting to WebSocket server:', WS_SERVER_URL);
-    
+    console.log('🔌 Initializing WebSocket connection for signaling...');
+    connectToSignalingServer();
+}
+
+// Connect to signaling WebSocket server
+function connectToSignalingServer() {
+    if (!deviceInfo || !deviceInfo.registered) {
+        console.log('🔄 Device not registered yet, skipping signaling WebSocket connection');
+        return;
+    }
+
+    const deviceId = deviceInfo?.deviceId; // Use public device_id, not DB id
+    if (!deviceId) {
+        console.log('⚠️ Device ID not available for signaling, waiting...');
+        setTimeout(connectToSignalingServer, 1000);
+        return;
+    }
+
     try {
-        ws = new WebSocket(WS_SERVER_URL);
+    const wsUrl = `${WS_SERVER_URL}?device_id=${deviceId}&role=agent`;
+        console.log('🔌 Connecting to signaling WebSocket:', wsUrl);
+        ws = new WebSocket(wsUrl);
         
         ws.onopen = () => {
-            console.log('✅ WebSocket connected successfully');
+            console.log('✅ Signaling WebSocket connected successfully');
             isWebSocketConnected = true;
             
             // Create session for this device
+            const sessionId = `device-${deviceId}`;
             ws.send(JSON.stringify({
                 type: 'create-session',
                 sessionId: sessionId
             }));
             
-            updateStatus('WebSocket connected - Ready for remote access');
+            updateStatus('Signaling WebSocket connected - Ready for remote access');
         };
         
         ws.onmessage = async (event) => {
             try {
                 const data = JSON.parse(event.data);
-                console.log('📨 WebSocket message:', data.type, data);
+                console.log('📨 Signaling WebSocket message:', data.type, data);
                 
                 switch (data.type) {
                     case 'session-created':
                         console.log('✅ Agent session created successfully');
-                        currentSessionId = data.sessionId;
+                        console.log('🔍 Session data received:', data);
+                        currentSessionId = data.sessionId || data.data?.sessionId;
                         sessionConnected = true;
                         console.log('💾 Session variables set:', { currentSessionId, sessionConnected });
                         updateStatus('Remote session ready');
@@ -1006,20 +1260,52 @@ function initializeWebSocket() {
                         await startScreenShare(currentSessionId);
                         break;
                         
-                    case 'webrtc-answer':
-                        console.log('📝 Received WebRTC answer from viewer');
-                        await handleWebRTCAnswer(data.answer);
-                        break;
+        case 'webrtc-answer':
+            console.log('📝 Received WebRTC answer from viewer');
+            try {
+                if (remoteAnswerApplied || applyingRemoteAnswer) {
+                    console.log('ℹ️ Skipping duplicate answer: already applied or in-flight');
+                    break;
+                }
+                applyingRemoteAnswer = true;
+                const payload = (data && typeof data.data === 'object' && data.data !== null) ? data.data : data;
+                const answer = payload?.answer || payload;
+                await handleWebRTCAnswer(answer);
+                remoteAnswerApplied = true;
+            } catch (e) {
+                console.error('❌ Error handling webrtc-answer payload:', e, data);
+            } finally {
+                applyingRemoteAnswer = false;
+            }
+            break;
                         
                     case 'webrtc-ice':
                         console.log('🧊 Received ICE candidate from viewer');
-                        await handleICECandidate(data.candidate);
+                        try {
+                            const payload = (data && typeof data.data === 'object' && data.data !== null) ? data.data : data;
+                            await handleICECandidate(payload.candidate || payload);
+                        } catch (e) {
+                            console.error('❌ Error handling viewer ICE payload:', e, data);
+                        }
                         break;
                         
                     case 'viewer-input':
                         console.log('🖱️ Remote control input received:', data);
                         console.log('🖱️ Input action:', data.action, 'type:', data.type);
-                        handleRemoteInput(data);
+                        // Some senders wrap the payload as { inputData: {...}, sessionId, ... }
+                        handleRemoteInput(data.inputData || data);
+                        break;
+                    
+                    case 'input-event':
+                        // Backend forwards viewer input as 'input-event' with optional data wrapper
+                        try {
+                            const payload = (data && typeof data.data === 'object' && data.data !== null) ? data.data : data;
+                            const input = payload.inputData || payload; // normalize shape
+                            console.log('🖱️ Input-event received:', input);
+                            handleRemoteInput(input);
+                        } catch (e) {
+                            console.error('❌ Error handling input-event payload:', e, data);
+                        }
                         break;
                         
                     case 'viewer-disconnected':
@@ -1029,39 +1315,46 @@ function initializeWebSocket() {
                         break;
                 }
             } catch (error) {
-                console.error('❌ Error parsing WebSocket message:', error);
+                console.error('❌ Error parsing signaling WebSocket message:', error);
             }
         };
         
         ws.onerror = (error) => {
-            console.error('❌ WebSocket error:', error);
+            console.error('❌ Signaling WebSocket error:', error);
             isWebSocketConnected = false;
-            updateStatus('WebSocket connection error');
+            updateStatus('Signaling WebSocket connection error');
         };
         
         ws.onclose = () => {
-            console.log('🔌 WebSocket connection closed');
+            console.log('🔌 Signaling WebSocket connection closed');
             isWebSocketConnected = false;
-            updateStatus('WebSocket disconnected');
+            updateStatus('Signaling WebSocket disconnected');
             
             // Attempt to reconnect after 5 seconds
             setTimeout(() => {
                 if (!isWebSocketConnected && deviceInfo && deviceInfo.registered) {
-                    console.log('🔄 Attempting to reconnect WebSocket...');
-                    initializeWebSocket();
+                    console.log('🔄 Attempting to reconnect signaling WebSocket...');
+                    connectToSignalingServer();
                 }
             }, 5000);
         };
         
     } catch (error) {
-        console.error('❌ Failed to create WebSocket connection:', error);
-        updateStatus('Failed to connect to WebSocket server');
+        console.error('❌ Failed to create signaling WebSocket connection:', error);
+        updateStatus('Failed to connect to signaling WebSocket server');
     }
 }
 
 // Start screen sharing with WebRTC
 async function startScreenShare(sessionId) {
     try {
+        console.log('🚀 DEBUG: startScreenShare called with sessionId:', sessionId);
+        console.log('🚀 DEBUG: peerConnection exists:', !!peerConnection);
+        console.log('🚀 DEBUG: localStream exists:', !!localStream);
+        // Reset signaling flags for a fresh negotiation
+        remoteAnswerApplied = false;
+        applyingRemoteAnswer = false;
+        pendingIceCandidates = [];
         console.log('🖥️ Starting screen capture...');
         
         // Create peer connection
@@ -1352,31 +1645,116 @@ async function startScreenShare(sessionId) {
             }
         });
         
+        // Verify tracks were added
+        console.log('🔍 Verifying tracks added to peer connection...');
+        const senders = peerConnection.getSenders();
+        console.log('📊 Total senders:', senders.length);
+        senders.forEach((sender, index) => {
+            console.log(`📊 Sender ${index}:`, sender.track?.kind || 'no track');
+        });
+        
         // Handle ICE candidates
         peerConnection.onicecandidate = (event) => {
             if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+                // Check if we have a valid session ID
+                if (!currentSessionId) {
+                    console.error('❌ Cannot send ICE candidate: currentSessionId is not set');
+                    return;
+                }
+                
+                // Validate ICE candidate data
+                if (!event.candidate.candidate || event.candidate.candidate.trim() === '') {
+                    console.error('❌ Cannot send ICE candidate: candidate data is empty');
+                    return;
+                }
+                
                 console.log('🧊 Sending ICE candidate to viewer');
+                // Convert RTCIceCandidate to plain object for JSON serialization
+                const candidateData = {
+                    candidate: event.candidate.candidate,
+                    sdpMid: event.candidate.sdpMid,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex,
+                    usernameFragment: event.candidate.usernameFragment
+                };
+                
+                // Validate candidate data before sending
+                if (!candidateData.candidate || candidateData.candidate.trim() === '') {
+                    console.error('❌ Cannot send ICE candidate: processed candidate data is empty');
+                    return;
+                }
+                
                 ws.send(JSON.stringify({
                     type: 'webrtc-ice',
-                    candidate: event.candidate,
+                    candidate: candidateData,
                     sessionId: currentSessionId,
                     target: 'viewer'
                 }));
             }
         };
         
+        // Wait a moment for tracks to be processed
+        console.log('⏳ Waiting for tracks to be processed...');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Create and send offer
         console.log('📤 Creating WebRTC offer...');
         const offer = await peerConnection.createOffer();
+        console.log('📋 Offer created:', offer);
+        console.log('📋 Offer type:', typeof offer);
+        console.log('📋 Offer SDP length:', offer?.sdp?.length || 0);
+        console.log('📋 Offer SDP preview:', offer?.sdp?.substring(0, 100) + '...');
+        
+        if (!offer || !offer.sdp) {
+            console.error('❌ Failed to create WebRTC offer - offer is null/undefined or has no SDP');
+            console.error('❌ Offer object:', offer);
+            return;
+        }
+        
+        // Validate SDP content
+        if (offer.sdp.trim() === '' || offer.sdp.length < 100) {
+            console.error('❌ Failed to create WebRTC offer - SDP is too short or empty');
+            console.error('❌ SDP length:', offer.sdp.length);
+            return;
+        }
+        
         await peerConnection.setLocalDescription(offer);
+        console.log('📋 Local description set successfully');
         
         if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
+            // Check if we have a valid session ID
+            if (!currentSessionId) {
+                console.error('❌ Cannot send offer: currentSessionId is not set');
+                return;
+            }
+            
+            // Convert RTCSessionDescription to plain object for JSON serialization
+            const offerData = {
+                type: offer.type,
+                sdp: offer.sdp
+            };
+            
+            // Final validation before sending
+            if (!offerData.sdp || offerData.sdp.trim() === '') {
+                console.error('❌ Cannot send offer: processed SDP is empty');
+                return;
+            }
+            
+            const message = {
                 type: 'webrtc-offer',
-                offer: offer,
+                offer: offerData,
                 sessionId: currentSessionId,
                 target: 'viewer'
-            }));
+            };
+            console.log('📤 Sending offer message:', message);
+            console.log('📤 Offer data type:', offerData.type);
+            console.log('📤 Offer SDP length:', offerData.sdp.length);
+            
+            // CRITICAL: Log the actual JSON string being sent
+            const jsonString = JSON.stringify(message);
+            console.log('🔍 JSON string length:', jsonString.length);
+            console.log('🔍 JSON string preview:', jsonString.substring(0, 200) + '...');
+            
+            ws.send(jsonString);
             console.log('✅ WebRTC offer sent to viewer');
         }
         
@@ -1389,12 +1767,54 @@ async function startScreenShare(sessionId) {
 // Handle WebRTC answer from viewer
 async function handleWebRTCAnswer(answer) {
     try {
-        if (peerConnection && peerConnection.signalingState === 'have-local-offer') {
-            await peerConnection.setRemoteDescription(answer);
-            console.log('✅ WebRTC answer processed successfully');
-            updateStatus('WebRTC connection established');
+        if (!peerConnection) {
+            console.error('❌ No peerConnection available when setting remote answer');
+            return;
+        }
+
+        // Unwrap and coerce to a proper RTCSessionDescriptionInit
+        const normalized = (answer && answer.sdp) ? answer : (answer?.data?.answer || answer?.answer || answer?.data || answer);
+        if (!normalized || !normalized.sdp) {
+            console.error('❌ Invalid answer payload (missing sdp):', answer);
+            return;
+        }
+
+        // Guard against duplicate/late answers
+        const state = peerConnection.signalingState;
+        const alreadySet = !!peerConnection.currentRemoteDescription;
+        console.log('🔎 handleWebRTCAnswer state:', state, 'alreadySet:', alreadySet);
+        if (alreadySet || state === 'stable') {
+            console.log('ℹ️ Skipping remote answer: already set or in stable state');
+            return;
+        }
+        if (state !== 'have-local-offer' && state !== 'have-local-pranswer') {
+            console.warn('⚠️ Skipping remote answer: unexpected signalingState', state);
+            return;
+        }
+
+        const desc = new RTCSessionDescription({ type: 'answer', sdp: normalized.sdp });
+        await peerConnection.setRemoteDescription(desc);
+        console.log('✅ WebRTC answer processed successfully');
+        updateStatus('WebRTC connection established');
+
+        // Flush any ICE candidates received before the answer was set
+        if (pendingIceCandidates && pendingIceCandidates.length > 0) {
+            console.log(`🧊 Flushing ${pendingIceCandidates.length} queued ICE candidates`);
+            for (const queued of pendingIceCandidates.splice(0)) {
+                try {
+                    await handleICECandidate(queued);
+                } catch (e) {
+                    console.warn('⚠️ Failed to apply queued ICE candidate:', e);
+                }
+            }
         }
     } catch (error) {
+        // Ignore late/duplicate answers that hit stable state
+        const msg = String(error && (error.message || error.name || error));
+        if (msg.includes('stable') || msg.includes('InvalidState')) {
+            console.warn('ℹ️ Ignoring duplicate/late answer after stable state');
+            return;
+        }
         console.error('❌ Error handling WebRTC answer:', error);
     }
 }
@@ -1402,12 +1822,39 @@ async function handleWebRTCAnswer(answer) {
 // Handle ICE candidates from viewer
 async function handleICECandidate(candidate) {
     try {
-        if (peerConnection && peerConnection.remoteDescription) {
-            await peerConnection.addIceCandidate(candidate);
-            console.log('✅ ICE candidate added successfully');
+        if (!peerConnection) {
+            console.warn('⚠️ ICE ignored: no peerConnection');
+            return;
         }
+        if (!peerConnection.remoteDescription) {
+            // Queue until remote answer is applied
+            pendingIceCandidates.push(candidate);
+            console.warn('⚠️ ICE queued: remoteDescription not set yet');
+            return;
+        }
+
+        // Normalize candidate to RTCIceCandidateInit
+        const raw = (candidate && candidate.candidate) ? candidate : { candidate };
+        const init = {
+            candidate: raw.candidate,
+            sdpMid: raw.sdpMid ?? null,
+            sdpMLineIndex: raw.sdpMLineIndex ?? null,
+            usernameFragment: raw.usernameFragment ?? undefined,
+        };
+
+        // If both sdpMid and sdpMLineIndex are missing, try to infer sensible defaults
+        if (init.sdpMid == null && init.sdpMLineIndex == null) {
+            // Prefer video m-line if present
+            const senders = peerConnection.getSenders();
+            const hasVideo = senders.some(s => s.track && s.track.kind === 'video');
+            init.sdpMid = hasVideo ? 'video' : 'audio';
+            init.sdpMLineIndex = hasVideo ? 0 : 0; // fallback to first m-line
+        }
+
+        await peerConnection.addIceCandidate(new RTCIceCandidate(init));
+        console.log('✅ ICE candidate added successfully');
     } catch (error) {
-        console.error('❌ Error adding ICE candidate:', error);
+        console.error('❌ Error adding ICE candidate:', error, candidate);
     }
 }
 
