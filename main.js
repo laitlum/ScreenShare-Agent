@@ -21,7 +21,7 @@ async function resolveAgentDeviceId() {
     const hostname = os.hostname();
     console.log('Resolving device_id for host:', hostname);
 
-    const resp = await fetch('http://localhost:3002/api/devices', {
+    const resp = await fetch(`${runtimeConfig.BACKEND_URL}/api/devices`, {
       headers: {
         // Dev-only header accepted by backend in debug mode
         'X-User-Email': 'sattiramakrishna333@gmail.com'
