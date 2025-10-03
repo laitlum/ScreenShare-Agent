@@ -18,6 +18,7 @@ let scanProgress = 0;
 let scanInterval = null;
 let isSignedIn = false;
 let lastScanTime = null;
+let agentStartTime = Date.now();
 let dashboardInterval = null;
 
 // Configuration - Environment-based
@@ -2299,6 +2300,41 @@ function updateBackgroundStatusUI(status) {
       indicator.className = "w-3 h-3 bg-gray-400 rounded-full";
     }
   }
+}
+
+// Update dashboard statistics
+function updateDashboardStats() {
+    try {
+        // Update system uptime
+        const uptimeElement = document.querySelector('[data-stat="uptime"]');
+        if (uptimeElement && typeof agentStartTime !== 'undefined') {
+            const uptime = Date.now() - agentStartTime;
+            const hours = Math.floor(uptime / 3600000);
+            const minutes = Math.floor((uptime % 3600000) / 60000);
+            const seconds = Math.floor((uptime % 60000) / 1000);
+            uptimeElement.textContent = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Update file scan count (mock incremental updates)
+        const filesScannedElement = document.querySelector('[data-stat="files-scanned"]');
+        if (filesScannedElement) {
+            const currentCount = parseInt(filesScannedElement.textContent.replace(/,/g, '')) || 1247892;
+            const newCount = currentCount + Math.floor(Math.random() * 100);
+            filesScannedElement.textContent = newCount.toLocaleString();
+        }
+
+        // Update system boost percentage
+        const boostElement = document.querySelector('[data-stat="boost-percentage"]');
+        if (boostElement) {
+            const currentBoost = parseInt(boostElement.textContent.replace(/[^\d]/g, '')) || 24;
+            const newBoost = Math.min(currentBoost + Math.floor(Math.random() * 3) - 1, 35);
+            boostElement.textContent = `+${newBoost}%`;
+        }
+
+        console.log('📊 Dashboard stats updated');
+    } catch (error) {
+        console.warn('⚠️ Error updating dashboard stats:', error);
+    }
 }
 
 // Initialize when DOM is ready
