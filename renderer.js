@@ -18,8 +18,8 @@ if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'p
     console.log('🔧 Production Environment - Backend:', BACKEND_URL);
 } else {
     // Development URLs (default)
-    BACKEND_URL = 'http://localhost:3001';
-    BACKEND_WS_URL = 'ws://localhost:8081/ws';
+    BACKEND_URL = 'http://localhost:8000';
+    BACKEND_WS_URL = 'ws://localhost:8000/ws';
     console.log('🔧 Development Environment - Backend:', BACKEND_URL);
 }
 

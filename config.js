@@ -2,8 +2,8 @@
 const { app } = require('electron');
 const config = {
   development: {
-    BACKEND_URL: 'http://localhost:3002',
-    BACKEND_WS_URL: 'ws://localhost:8081/ws',
+    BACKEND_URL: 'http://localhost:8000',
+    BACKEND_WS_URL: 'ws://localhost:8000/ws',
     WS_SERVER_URL: 'ws://localhost:8081/ws',
   },
   production: {

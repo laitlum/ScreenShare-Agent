@@ -29,7 +29,7 @@
     "webrtc",
     "websocket"
   ],
-  "author": "Your Name",
+  "author": "Nirvana",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2",
