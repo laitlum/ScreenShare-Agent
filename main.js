@@ -43,45 +43,17 @@ let isQuitting = false;
 
 async function resolveAgentDeviceId() {
   try {
-    // Allow override via env for development
+    // Allow override via env for development/testing
     if (process.env.LA_DEVICE_ID) {
       console.log("Using device_id from env:", process.env.LA_DEVICE_ID);
       return process.env.LA_DEVICE_ID;
     }
 
-    const hostname = os.hostname();
-    console.log("Resolving device_id for host:", hostname);
-
-    const resp = await fetch("http://localhost:3002/api/devices", {
-      headers: {
-        // Dev-only header accepted by backend in debug mode
-        "X-User-Email": "sattiramakrishna333@gmail.com",
-      },
-    });
-    if (!resp.ok) {
-      throw new Error(`devices api status ${resp.status}`);
-    }
-    const devices = await resp.json();
-    if (!Array.isArray(devices) || devices.length === 0) {
-      throw new Error("no devices found");
-    }
-
-    // Prefer a device that matches this host, else first active device
-    let matched = devices.find((d) =>
-      (d?.device_name || d?.name || "")
-        .toLowerCase()
-        .includes(hostname.toLowerCase())
-    );
-    if (!matched) {
-      matched = devices.find((d) => d?.is_active) || devices[0];
-    }
-
-    console.log("Selected device record:", {
-      id: matched?.id,
-      device_id: matched?.device_id,
-      name: matched?.device_name || matched?.name,
-    });
-    return matched?.device_id;
+    // In production, the device_id is generated and stored locally by the renderer
+    // We'll retrieve it from localStorage via the renderer when needed
+    // For now, return undefined and let the renderer handle device registration
+    console.log("Device ID will be managed by renderer process during registration");
+    return undefined;
   } catch (e) {
     console.log("Failed to resolve device_id:", e?.message || e);
     return undefined;
