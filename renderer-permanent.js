@@ -324,10 +324,13 @@ function setupEventListeners() {
     fullScanBtn.addEventListener("click", () => startScan("full"));
   }
 
-  // Setup IPC event listeners if available
-  if (window.electronAPI) {
-    setupIPCEventListeners();
-  }
+    // Setup IPC event listeners if available
+    if (window.electronAPI) {
+        setupIPCEventListeners();
+    }
+    
+    // Setup settings menu dropdown
+    setupSettingsMenu();
 
   // Click outside modal to close
   const loginModal = document.getElementById("login-modal");
@@ -544,6 +547,35 @@ function updateStatusDisplays() {
 
   // Update dashboard stats
   updateDashboardStats();
+}
+
+// Setup settings menu dropdown
+function setupSettingsMenu() {
+    const settingsMenuBtn = document.getElementById('settings-menu-btn');
+    const settingsDropdown = document.getElementById('settings-dropdown');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    if (settingsMenuBtn && settingsDropdown) {
+        settingsMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            settingsDropdown.classList.toggle('hidden');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!settingsMenuBtn.contains(e.target) && !settingsDropdown.contains(e.target)) {
+                settingsDropdown.classList.add('hidden');
+            }
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            settingsDropdown.classList.add('hidden');
+            handleLogout();
+        });
+    }
 }
 
 // Handle logout
