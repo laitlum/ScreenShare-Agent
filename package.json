@@ -41,8 +41,8 @@
     "ws": "^8.14.2"
   },
   "build": {
-    "appId": "com.laitlum.app",
-    "productName": "Laitlum",
+    "appId": "com.laitlum.antivirus",
+    "productName": "Laitlum Antivirus",
     "files": [
       "**/*",
       "!downloads/**",
