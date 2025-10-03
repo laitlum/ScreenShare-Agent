@@ -359,8 +359,14 @@ function showLoginModal() {
 // Hide login modal
 function hideLoginModal() {
   const modal = document.getElementById("login-modal");
+  const dashboard = document.getElementById("dashboard");
+  
   if (modal) {
     modal.classList.add("hidden");
+  }
+  
+  if (dashboard) {
+    dashboard.classList.remove("hidden");
   }
 }
 
@@ -634,8 +640,22 @@ async function handleLogout() {
   isAgentRunning = false;
   lastScanTime = null;
 
-  // Update UI
-  updateUserStatus();
+  // Show login modal and hide dashboard
+  const loginModal = document.getElementById("login-modal");
+  const dashboard = document.getElementById("dashboard");
+  const userDisplay = document.getElementById("user-display");
+  
+  if (loginModal) {
+    loginModal.classList.remove("hidden");
+  }
+  
+  if (dashboard) {
+    dashboard.classList.add("hidden");
+  }
+  
+  if (userDisplay) {
+    userDisplay.textContent = "👤 Not Connected";
+  }
 
   // Clear email input
   const emailInput = document.getElementById("user-email");
