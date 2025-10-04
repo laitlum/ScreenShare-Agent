@@ -1,4 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
+const runtimeConfig = require("./config");
+
 let desktopCapturer;
 
 try {
@@ -12,10 +14,18 @@ try {
 console.log("🔧 Preload script loading...");
 console.log("🔧 desktopCapturer available:", !!desktopCapturer);
 console.log("🔧 ipcRenderer available:", !!ipcRenderer);
+console.log("🔧 Runtime config loaded:", runtimeConfig);
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld("electronAPI", {
+  // Configuration
+  config: {
+    BACKEND_URL: runtimeConfig.BACKEND_URL,
+    BACKEND_WS_URL: runtimeConfig.BACKEND_WS_URL,
+    WS_SERVER_URL: runtimeConfig.WS_SERVER_URL,
+  },
+  
   // Session management
   createSession: () => ipcRenderer.invoke("create-session"),
 

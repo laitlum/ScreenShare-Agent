@@ -7,20 +7,21 @@ let deviceInfo = null;
 let backendWS = null;
 
 // Configuration - Environment-based
-// In Electron renderer, we need to use direct environment detection
+// Configuration - Get from electronAPI (passed from main process via preload)
 let BACKEND_URL, BACKEND_WS_URL;
 
-// Detect environment and set URLs accordingly
-if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
-    // Production URLs
-    BACKEND_URL = process.env.BACKEND_URL || 'https://your-heroku-backend.herokuapp.com';
-    BACKEND_WS_URL = process.env.BACKEND_WS_URL || 'wss://your-heroku-backend.herokuapp.com';
-    console.log('🔧 Production Environment - Backend:', BACKEND_URL);
+if (window.electronAPI && window.electronAPI.config) {
+    // Use configuration from main process
+    BACKEND_URL = window.electronAPI.config.BACKEND_URL;
+    BACKEND_WS_URL = window.electronAPI.config.BACKEND_WS_URL;
+    console.log('🔧 Configuration loaded from main process');
+    console.log('🔧 Backend URL:', BACKEND_URL);
 } else {
-    // Development URLs (default)
+    // Fallback to development URLs if electronAPI is not available
     BACKEND_URL = 'http://localhost:8000';
     BACKEND_WS_URL = 'ws://localhost:8000/ws';
-    console.log('🔧 Development Environment - Backend:', BACKEND_URL);
+    console.warn('⚠️ electronAPI.config not available, using development URLs');
+    console.log('🔧 Backend URL:', BACKEND_URL);
 }
 
 // Initialize the application

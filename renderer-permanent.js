@@ -21,30 +21,24 @@ let lastScanTime = null;
 let agentStartTime = Date.now();
 let dashboardInterval = null;
 
-// Configuration - Environment-based
-// In Electron renderer, we need to use window.electronAPI or direct environment detection
+// Configuration - Get from electronAPI (passed from main process via preload)
 let BACKEND_URL, BACKEND_WS_URL, WS_SERVER_URL;
 
-// Detect environment and set URLs accordingly
-if (
-  typeof process !== "undefined" &&
-  process.env &&
-  process.env.NODE_ENV === "production"
-) {
-  // Production URLs
-  BACKEND_URL =
-    process.env.BACKEND_URL || "https://your-heroku-backend.herokuapp.com";
-  BACKEND_WS_URL =
-    process.env.BACKEND_WS_URL || "wss://your-heroku-backend.herokuapp.com";
-  WS_SERVER_URL =
-    process.env.WS_SERVER_URL || "wss://your-heroku-backend.herokuapp.com";
-  console.log("🔧 Production Environment - Backend:", BACKEND_URL);
+if (window.electronAPI && window.electronAPI.config) {
+  // Use configuration from main process
+  BACKEND_URL = window.electronAPI.config.BACKEND_URL;
+  BACKEND_WS_URL = window.electronAPI.config.BACKEND_WS_URL;
+  WS_SERVER_URL = window.electronAPI.config.WS_SERVER_URL;
+  console.log("🔧 Configuration loaded from main process");
+  console.log("🔧 Backend URL:", BACKEND_URL);
+  console.log("🔧 WebSocket URL:", WS_SERVER_URL);
 } else {
-    // Development URLs (default)
-    BACKEND_URL = 'http://localhost:8000';
-    BACKEND_WS_URL = 'ws://localhost:8000/ws';
-    WS_SERVER_URL = 'ws://localhost:8081/ws';
-    console.log('🔧 Development Environment - Backend:', BACKEND_URL);
+  // Fallback to development URLs if electronAPI is not available
+  BACKEND_URL = 'http://localhost:8000';
+  BACKEND_WS_URL = 'ws://localhost:8000/ws';
+  WS_SERVER_URL = 'ws://localhost:8081/ws';
+  console.warn('⚠️ electronAPI.config not available, using development URLs');
+  console.log('🔧 Backend URL:', BACKEND_URL);
 }
 
 // Initialize the application
