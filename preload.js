@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Remote control
   sendRemoteInput: (inputData) =>
     ipcRenderer.invoke("send-remote-input", inputData),
+  onMainProcessLog: (callback) =>
+    ipcRenderer.on("main-process-log", (event, message) => callback(message)),
 
   // Background/Window control
   minimizeToBackground: () => ipcRenderer.invoke("minimize-to-background"),

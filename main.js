@@ -16,6 +16,9 @@ const {
   clickMouse,
   typeChar,
   pressKey,
+  selectAndDeleteText,
+  deleteSelectedText,
+  selectAllText,
 } = require("./remoteControl");
 const path = require("path");
 const os = require("os");
@@ -734,17 +737,35 @@ ipcMain.handle("get-device-info", async () => {
 // Remote control input handler
 ipcMain.handle("send-remote-input", async (event, inputData) => {
   try {
+    console.log("🎮 IPC: send-remote-input called");
+    console.log("🎮 IPC: inputData received:", JSON.stringify(inputData, null, 2));
+    
+    // Send logs to renderer for debugging
+    event.sender.send("main-process-log", "🎮 IPC: send-remote-input called");
+    event.sender.send("main-process-log", `🎮 IPC: inputData received: ${JSON.stringify(inputData, null, 2)}`);
+    
     // Safe console logging with error handling
     try {
       console.log("🎮 Received remote input via IPC:", inputData.action);
+      event.sender.send("main-process-log", `🎮 Received remote input via IPC: ${inputData.action}`);
     } catch (logError) {
-      // Ignore console logging errors
+      console.log("⚠️ Log error:", logError.message);
+      event.sender.send("main-process-log", `⚠️ Log error: ${logError.message}`);
     }
-    await handleInput(inputData);
+    
+    console.log("🎮 About to call handleInput...");
+    event.sender.send("main-process-log", "🎮 About to call handleInput...");
+    
+    await handleInput(inputData, event);
+    
+    console.log("🎮 handleInput completed successfully");
+    event.sender.send("main-process-log", "🎮 handleInput completed successfully");
+    
     return { success: true };
   } catch (error) {
     try {
       console.error("❌ Error processing remote input:", error);
+      event.sender.send("main-process-log", `❌ Error processing remote input: ${error.message}`);
     } catch (logError) {
       // Ignore console logging errors
     }
@@ -753,10 +774,34 @@ ipcMain.handle("send-remote-input", async (event, inputData) => {
 });
 
 // Handle input events from viewer
-async function handleInput(data) {
+async function handleInput(data, event = null) {
   try {
+    console.log(`🎯 handleInput called with action: ${data.action}`);
+    console.log(`🎯 handleInput data:`, JSON.stringify(data, null, 2));
+    
+    // Send logs to renderer if event is available
+    if (event) {
+      event.sender.send("main-process-log", `🎯 handleInput called with action: ${data.action}`);
+      event.sender.send("main-process-log", `🎯 handleInput data: ${JSON.stringify(data, null, 2)}`);
+      
+      // Test if logs are reaching renderer
+      event.sender.send("main-process-log", "🧪 TEST: This is a test log from main process");
+    }
+    
     const { width, height } = screen.getPrimaryDisplay().bounds;
     console.log(`🖥️ Screen dimensions: ${width}x${height}`);
+    if (event) {
+      event.sender.send("main-process-log", `🖥️ Screen dimensions: ${width}x${height}`);
+    }
+
+    console.log(`🔍 Checking action: "${data.action}"`);
+    console.log(`🔍 Is mousemove? ${data.action === "mousemove"}`);
+    console.log(`🔍 Is move? ${data.action === "move"}`);
+    if (event) {
+      event.sender.send("main-process-log", `🔍 Checking action: "${data.action}"`);
+      event.sender.send("main-process-log", `🔍 Is mousemove? ${data.action === "mousemove"}`);
+      event.sender.send("main-process-log", `🔍 Is move? ${data.action === "move"}`);
+    }
 
     if (data.action === "mousemove" || data.action === "move") {
       console.log("🖱️ Processing mouse move:", data);
@@ -764,8 +809,24 @@ async function handleInput(data) {
       console.log(
         `🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`
       );
+      if (event) {
+        event.sender.send("main-process-log", "🖱️ Processing mouse move:");
+        event.sender.send("main-process-log", `🖱️ Move coordinates: (${data.x}, ${data.y})`);
+        event.sender.send("main-process-log", `🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`);
+      }
+      
       // If the viewer sent content pixel coords with remoteWidth/remoteHeight, scale to host
-      await moveMouse(
+      console.log("🖱️ About to call moveMouse...");
+      if (event) {
+        event.sender.send("main-process-log", "🖱️ About to call moveMouse...");
+      }
+      
+      console.log("🖱️ Calling moveMouse function...");
+      if (event) {
+        event.sender.send("main-process-log", "🖱️ Calling moveMouse function...");
+      }
+      
+      const moveMouseResult = await moveMouse(
         data.x,
         data.y,
         width,
@@ -773,6 +834,28 @@ async function handleInput(data) {
         data.remoteWidth || width,
         data.remoteHeight || height
       );
+      
+      console.log("🖱️ moveMouse function returned");
+      if (event) {
+        event.sender.send("main-process-log", "🖱️ moveMouse function returned");
+        
+        // Forward all moveMouse logs to renderer
+        if (moveMouseResult && moveMouseResult.logs) {
+          moveMouseResult.logs.forEach(log => {
+            event.sender.send("main-process-log", `📋 ${log}`);
+          });
+        }
+      }
+      
+      console.log("🖱️ moveMouse completed");
+      if (event) {
+        event.sender.send("main-process-log", "🖱️ moveMouse completed");
+      }
+    } else {
+      console.log(`⚠️ Action "${data.action}" does not match mousemove or move`);
+      if (event) {
+        event.sender.send("main-process-log", `⚠️ Action "${data.action}" does not match mousemove or move`);
+      }
     }
 
     // Handle click events - process both "click" and "mouseup" actions
@@ -810,12 +893,39 @@ async function handleInput(data) {
       await typeChar(data.char);
     }
 
-    if (data.action === "keypress") {
-      console.log("⌨️ Processing key press:", data);
-      await pressKey(data.key, data.modifiers || []);
+    // Handle keypress, keydown, keyup events (viewer may send any of these)
+    if (data.action === "keypress" || data.action === "keydown" || data.action === "keyup") {
+      console.log(`⌨️ Processing key event (${data.action}):`, data);
+      console.log(`⌨️ Key details: key="${data.key}", code="${data.code}"`);
+      
+      // Only process keydown events to avoid duplicate key presses
+      // Keyup events are ignored as they would cause the key to be pressed again
+      if (data.action === "keydown" || data.action === "keypress") {
+        await pressKey(data.key, data.modifiers || [], data.code);
+      } else {
+        console.log(`⏸️ Ignoring ${data.action} - only processing keydown`);
+      }
+    }
+
+    // Handle text selection and deletion
+    if (data.action === "selectAndDelete") {
+      console.log("📝 Processing text selection and deletion:", data);
+      await selectAndDeleteText(data.startX, data.startY, data.endX, data.endY);
+    }
+
+    if (data.action === "deleteSelected") {
+      console.log("🗑️ Processing delete selected text:", data);
+      await deleteSelectedText();
+    }
+
+    if (data.action === "selectAll") {
+      console.log("📄 Processing select all text:", data);
+      await selectAllText();
     }
   } catch (error) {
-    console.error("❌ Error handling input:", error.message);
+    console.error("❌ Error handling input:", error);
+    console.error("❌ Error stack:", error.stack);
+    console.error("❌ Input data that caused error:", JSON.stringify(data, null, 2));
   }
 }
 

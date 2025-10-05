@@ -2084,13 +2084,20 @@ async function startScreenShare(sessionId) {
         return;
       }
 
+      // Get actual screen dimensions to send to viewer
+      const screenWidth = window.screen.width;
+      const screenHeight = window.screen.height;
+      console.log(`📐 Agent screen dimensions: ${screenWidth}x${screenHeight}`);
+      
       const message = {
         type: "webrtc-offer",
         offer: offerData,
         sessionId: currentSessionId,
         target: "viewer",
+        screenWidth: screenWidth,
+        screenHeight: screenHeight,
       };
-      console.log("📤 Sending offer message:", message);
+      console.log("📤 Sending offer message with screen dimensions:", message);
       console.log("📤 Offer data type:", offerData.type);
       console.log("📤 Offer SDP length:", offerData.sdp.length);
 
@@ -2226,15 +2233,26 @@ async function handleICECandidate(candidate) {
 // Handle remote control input using nut.js
 async function handleRemoteInput(data) {
   try {
+    console.log("🔄 handleRemoteInput called with:", JSON.stringify(data, null, 2));
+    
     // Send remote control command to main process via IPC
     if (window.electronAPI && window.electronAPI.sendRemoteInput) {
-      await window.electronAPI.sendRemoteInput(data);
+      console.log("🔄 Sending to main process via IPC...");
+      const result = await window.electronAPI.sendRemoteInput(data);
+      console.log("🔄 IPC result:", result);
     } else {
       console.warn("⚠️ Remote input API not available");
     }
   } catch (error) {
     console.error("❌ Error handling remote input:", error);
   }
+}
+
+// Listen for main process logs
+if (window.electronAPI && window.electronAPI.onMainProcessLog) {
+  window.electronAPI.onMainProcessLog((logMessage) => {
+    console.log("📋 Main Process:", logMessage);
+  });
 }
 
 // Stop screen sharing
