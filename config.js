@@ -5,9 +5,9 @@ const fs = require('fs');
 
 // Production URLs - ALWAYS use these unless explicitly in development
 const PRODUCTION_URLS = {
-  BACKEND_URL: 'https://screenshare-production.up.railway.app',
-  BACKEND_WS_URL: 'wss://screenshare-production.up.railway.app/ws',
-  WS_SERVER_URL: 'wss://screenshare-production.up.railway.app/ws',
+  BACKEND_URL: 'https://laitlum.lipiq.in',
+  BACKEND_WS_URL: 'wss://laitlum.lipiq.in/ws',
+  WS_SERVER_URL: 'wss://laitlum.lipiq.in/ws',
 };
 
 const DEVELOPMENT_URLS = {

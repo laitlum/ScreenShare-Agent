@@ -19,6 +19,8 @@ const {
   selectAndDeleteText,
   deleteSelectedText,
   selectAllText,
+  scrollWheel,
+  mouseDragSelection,
 } = require("./remoteControl");
 const path = require("path");
 const os = require("os");
@@ -776,57 +778,11 @@ ipcMain.handle("send-remote-input", async (event, inputData) => {
 // Handle input events from viewer
 async function handleInput(data, event = null) {
   try {
-    console.log(`🎯 handleInput called with action: ${data.action}`);
-    console.log(`🎯 handleInput data:`, JSON.stringify(data, null, 2));
-    
-    // Send logs to renderer if event is available
-    if (event) {
-      event.sender.send("main-process-log", `🎯 handleInput called with action: ${data.action}`);
-      event.sender.send("main-process-log", `🎯 handleInput data: ${JSON.stringify(data, null, 2)}`);
-      
-      // Test if logs are reaching renderer
-      event.sender.send("main-process-log", "🧪 TEST: This is a test log from main process");
-    }
-    
     const { width, height } = screen.getPrimaryDisplay().bounds;
-    console.log(`🖥️ Screen dimensions: ${width}x${height}`);
-    if (event) {
-      event.sender.send("main-process-log", `🖥️ Screen dimensions: ${width}x${height}`);
-    }
-
-    console.log(`🔍 Checking action: "${data.action}"`);
-    console.log(`🔍 Is mousemove? ${data.action === "mousemove"}`);
-    console.log(`🔍 Is move? ${data.action === "move"}`);
-    if (event) {
-      event.sender.send("main-process-log", `🔍 Checking action: "${data.action}"`);
-      event.sender.send("main-process-log", `🔍 Is mousemove? ${data.action === "mousemove"}`);
-      event.sender.send("main-process-log", `🔍 Is move? ${data.action === "move"}`);
-    }
 
     if (data.action === "mousemove" || data.action === "move") {
-      console.log("🖱️ Processing mouse move:", data);
-      console.log(`🖱️ Move coordinates: (${data.x}, ${data.y})`);
-      console.log(
-        `🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`
-      );
-      if (event) {
-        event.sender.send("main-process-log", "🖱️ Processing mouse move:");
-        event.sender.send("main-process-log", `🖱️ Move coordinates: (${data.x}, ${data.y})`);
-        event.sender.send("main-process-log", `🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`);
-      }
-      
-      // If the viewer sent content pixel coords with remoteWidth/remoteHeight, scale to host
-      console.log("🖱️ About to call moveMouse...");
-      if (event) {
-        event.sender.send("main-process-log", "🖱️ About to call moveMouse...");
-      }
-      
-      console.log("🖱️ Calling moveMouse function...");
-      if (event) {
-        event.sender.send("main-process-log", "🖱️ Calling moveMouse function...");
-      }
-      
-      const moveMouseResult = await moveMouse(
+      // OPTIMIZED: Direct mouse movement without excessive logging
+      await moveMouse(
         data.x,
         data.y,
         width,
@@ -834,39 +790,10 @@ async function handleInput(data, event = null) {
         data.remoteWidth || width,
         data.remoteHeight || height
       );
-      
-      console.log("🖱️ moveMouse function returned");
-      if (event) {
-        event.sender.send("main-process-log", "🖱️ moveMouse function returned");
-        
-        // Forward all moveMouse logs to renderer
-        if (moveMouseResult && moveMouseResult.logs) {
-          moveMouseResult.logs.forEach(log => {
-            event.sender.send("main-process-log", `📋 ${log}`);
-          });
-        }
-      }
-      
-      console.log("🖱️ moveMouse completed");
-      if (event) {
-        event.sender.send("main-process-log", "🖱️ moveMouse completed");
-      }
-    } else {
-      console.log(`⚠️ Action "${data.action}" does not match mousemove or move`);
-      if (event) {
-        event.sender.send("main-process-log", `⚠️ Action "${data.action}" does not match mousemove or move`);
-      }
     }
 
     // Handle click events - process both "click" and "mouseup" actions
     if (data.action === "click" || data.action === "mouseup") {
-      console.log("🖱️ Processing mouse click:", data);
-      console.log(`🖱️ Click coordinates: (${data.x}, ${data.y})`);
-      console.log(
-        `🖱️ Remote dimensions: ${data.remoteWidth}x${data.remoteHeight}`
-      );
-      console.log(`🖱️ Mac screen: ${width}x${height}`);
-
       // Move mouse to click coordinates first, then click
       if (data.x !== undefined && data.y !== undefined) {
         await moveMouse(
@@ -880,47 +807,76 @@ async function handleInput(data, event = null) {
       }
 
       await clickMouse(data.button || "left");
-      console.log(`✅ Click executed successfully at (${data.x}, ${data.y})`);
     }
 
     // Skip mousedown to prevent multiple clicks
     if (data.action === "mousedown") {
-      console.log(`⏸️ Ignoring ${data.action} - preventing duplicate clicks`);
+      return; // Skip without logging
     }
 
     if (data.action === "type") {
-      console.log("⌨️ Processing character type:", data);
       await typeChar(data.char);
     }
 
     // Handle keypress, keydown, keyup events (viewer may send any of these)
     if (data.action === "keypress" || data.action === "keydown" || data.action === "keyup") {
-      console.log(`⌨️ Processing key event (${data.action}):`, data);
-      console.log(`⌨️ Key details: key="${data.key}", code="${data.code}"`);
-      
       // Only process keydown events to avoid duplicate key presses
-      // Keyup events are ignored as they would cause the key to be pressed again
       if (data.action === "keydown" || data.action === "keypress") {
         await pressKey(data.key, data.modifiers || [], data.code);
-      } else {
-        console.log(`⏸️ Ignoring ${data.action} - only processing keydown`);
       }
     }
 
     // Handle text selection and deletion
     if (data.action === "selectAndDelete") {
-      console.log("📝 Processing text selection and deletion:", data);
       await selectAndDeleteText(data.startX, data.startY, data.endX, data.endY);
     }
 
     if (data.action === "deleteSelected") {
-      console.log("🗑️ Processing delete selected text:", data);
       await deleteSelectedText();
     }
 
     if (data.action === "selectAll") {
-      console.log("📄 Processing select all text:", data);
       await selectAllText();
+    }
+
+    // Handle mouse wheel scrolling - OPTIMIZED
+    if (data.action === "wheel" || data.action === "scroll") {
+      console.log(`🖱️ Received scroll event: deltaX=${data.deltaX || 0}, deltaY=${data.deltaY || 0} at (${data.x}, ${data.y})`);
+      await scrollWheel(
+        data.x,
+        data.y,
+        data.deltaX || 0,
+        data.deltaY || 0,
+        width,
+        height,
+        data.remoteWidth || width,
+        data.remoteHeight || height
+      );
+    }
+
+    // Handle mouse drag selection - OPTIMIZED
+    if (data.action === "dragSelection") {
+      await mouseDragSelection(
+        data.startX,
+        data.startY,
+        data.endX,
+        data.endY,
+        width,
+        height,
+        data.remoteWidth || width,
+        data.remoteHeight || height
+      );
+    }
+
+    // Handle scroll up/down keyboard shortcuts
+    if (data.action === "scrollUp") {
+      console.log("⬆️ Processing scroll up:", data);
+      await pressKey("PageUp", [], "PageUp");
+    }
+
+    if (data.action === "scrollDown") {
+      console.log("⬇️ Processing scroll down:", data);
+      await pressKey("PageDown", [], "PageDown");
     }
   } catch (error) {
     console.error("❌ Error handling input:", error);

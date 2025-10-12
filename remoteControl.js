@@ -1,8 +1,8 @@
 const { mouse, left, right, Point, keyboard, Key } = require("@nut-tree-fork/nut-js");
 const os = require('os');
 
-// Optional: adjust mouse movement speed
-mouse.config.mouseSpeed = 800; // px/sec
+// Optimize mouse movement speed for low latency
+mouse.config.mouseSpeed = 2000; // px/sec - faster for better responsiveness
 
 // Platform detection helper
 function getPlatform() {
@@ -97,22 +97,15 @@ const keyMap = {
   "CapsLock": Key.CapsLock,
 };
 
-// Move mouse to coordinates with proper scaling
+// Move mouse to coordinates with proper scaling - OPTIMIZED FOR SPEED
 async function moveMouse(x, y, screenWidth, screenHeight, remoteWidth, remoteHeight, event = null) {
   const logs = []; // Collect logs to return to main process
   
   try {
-    const logMessage = `🚀 moveMouse function called with: ${JSON.stringify({ x, y, screenWidth, screenHeight, remoteWidth, remoteHeight })}`;
-    console.log(logMessage);
-    logs.push(logMessage);
-    
     // Detect Windows display scaling and adjust coordinates accordingly
     const { screen } = require('electron');
     const primaryDisplay = screen.getPrimaryDisplay();
     const scaleFactor = primaryDisplay.scaleFactor;
-    
-    console.log(`📐 Display scale factor: ${scaleFactor}`);
-    logs.push(`📐 Display scale factor: ${scaleFactor}`);
     
     // For Windows display scaling, we need to use physical coordinates
     // instead of logical coordinates for accurate mouse positioning
@@ -123,18 +116,12 @@ async function moveMouse(x, y, screenWidth, screenHeight, remoteWidth, remoteHei
       const physicalWidth = screenWidth * scaleFactor;
       const physicalHeight = screenHeight * scaleFactor;
       
-      console.log(`📐 Physical screen dimensions: ${physicalWidth}x${physicalHeight}`);
-      logs.push(`📐 Physical screen dimensions: ${physicalWidth}x${physicalHeight}`);
-      
       // Scale from remote dimensions to physical screen dimensions
       const scaleX = physicalWidth / remoteWidth;
       const scaleY = physicalHeight / remoteHeight;
       
       finalX = Math.round(x * scaleX);
       finalY = Math.round(y * scaleY);
-      
-      console.log(`📐 Using physical coordinates for Windows scaling`);
-      logs.push(`📐 Using physical coordinates for Windows scaling`);
     } else {
       // For other platforms or no scaling, use logical coordinates
       const scaleX = screenWidth / remoteWidth;
@@ -142,14 +129,7 @@ async function moveMouse(x, y, screenWidth, screenHeight, remoteWidth, remoteHei
       
       finalX = Math.round(x * scaleX);
       finalY = Math.round(y * scaleY);
-      
-      console.log(`📐 Using logical coordinates (no scaling)`);
-      logs.push(`📐 Using logical coordinates (no scaling)`);
     }
-    
-    // Use the calculated coordinates
-    const absX = finalX;
-    const absY = finalY;
     
     // Clamp to appropriate bounds based on scaling
     let maxX, maxY;
@@ -163,91 +143,21 @@ async function moveMouse(x, y, screenWidth, screenHeight, remoteWidth, remoteHei
       maxY = screenHeight - 1;
     }
     
-    const clampedX = Math.max(0, Math.min(maxX, absX));
-    const clampedY = Math.max(0, Math.min(maxY, absY));
+    const clampedX = Math.max(0, Math.min(maxX, finalX));
+    const clampedY = Math.max(0, Math.min(maxY, finalY));
     
-    // Calculate the actual scale factors used for logging
-    let logScaleX, logScaleY;
-    if (process.platform === 'win32' && scaleFactor > 1) {
-      logScaleX = (screenWidth * scaleFactor) / remoteWidth;
-      logScaleY = (screenHeight * scaleFactor) / remoteHeight;
-    } else {
-      logScaleX = screenWidth / remoteWidth;
-      logScaleY = screenHeight / remoteHeight;
-    }
-    
-    const movementLogs = [
-      `🖱️ Mouse Movement:`,
-      `   Input: (${x}, ${y}) from remote ${remoteWidth}x${remoteHeight}`,
-      `   Scale: (${logScaleX.toFixed(3)}, ${logScaleY.toFixed(3)})`,
-      `   Calculated: (${absX}, ${absY})`,
-      `   Final: (${clampedX}, ${clampedY}) on screen ${screenWidth}x${screenHeight}`
-    ];
-    
-    movementLogs.forEach(log => {
-      console.log(log);
-      logs.push(log);
-    });
-    
-    // Move the mouse to the calculated position
-    // Try multiple approaches to ensure accurate positioning
+    // Move the mouse to the calculated position - OPTIMIZED
     const targetPoint = new Point(clampedX, clampedY);
-    
-    // First, try the standard move
     await mouse.move([targetPoint]);
     
-    // Add a small delay to ensure the move is processed
-    await new Promise(resolve => setTimeout(resolve, 10));
+    // Minimal logging for performance
+    logs.push(`🖱️ Mouse moved to (${clampedX}, ${clampedY})`);
     
-    // Get current mouse position for verification
-    try {
-      const currentPos = await mouse.getPosition();
-      const posLog = `📍 Current mouse position after move: (${currentPos.x}, ${currentPos.y})`;
-      console.log(posLog);
-      logs.push(posLog);
-      
-      // Check if we're close to the target (within 5 pixels)
-      const distance = Math.sqrt(Math.pow(currentPos.x - clampedX, 2) + Math.pow(currentPos.y - clampedY, 2));
-      if (distance > 5) {
-        const mismatchLog = `⚠️ Mouse position mismatch! Target: (${clampedX}, ${clampedY}), Actual: (${currentPos.x}, ${currentPos.y}), Distance: ${distance.toFixed(1)}px`;
-        console.log(mismatchLog);
-        logs.push(mismatchLog);
-        
-        // Try a second move to correct the position
-        await mouse.move([targetPoint]);
-        const newPos = await mouse.getPosition();
-        const secondMoveLog = `🔄 Second move result: (${newPos.x}, ${newPos.y})`;
-        console.log(secondMoveLog);
-        logs.push(secondMoveLog);
-      } else {
-        const accurateLog = `✅ Mouse position accurate! Distance: ${distance.toFixed(1)}px`;
-        console.log(accurateLog);
-        logs.push(accurateLog);
-      }
-    } catch (posError) {
-      const errorLog = `⚠️ Could not verify mouse position: ${posError.message}`;
-      console.log(errorLog);
-      logs.push(errorLog);
-    }
-    
-    const completionLog = `✅ Mouse move completed to (${clampedX}, ${clampedY})`;
-    console.log(completionLog);
-    logs.push(completionLog);
-    
-    return { success: true, x: clampedX, y: clampedY, logs: logs };
+    return { success: true, logs };
   } catch (error) {
-    const errorLog = `❌ Mouse move failed: ${error.message}`;
-    const errorDetailsLog = `❌ Error details: ${JSON.stringify({
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    })}`;
+    console.error(`❌ Mouse move failed: ${error.message}`);
     
-    console.error(errorLog);
-    console.error(errorDetailsLog);
-    
-    logs.push(errorLog);
-    logs.push(errorDetailsLog);
+    logs.push(`❌ Mouse move failed: ${error.message}`);
     
     return { success: false, error: error.message, logs: logs };
   }
@@ -297,15 +207,12 @@ async function typeChar(char) {
 // Handle special key presses
 async function pressKey(key, modifiers = [], code = null) {
   try {
-    console.log(`⌨️ pressKey called with: key="${key}", code="${code}", modifiers=${JSON.stringify(modifiers)}`);
-    
     // Try to use code first (more reliable for special keys like KeyR, KeyE, etc.)
     let keyToUse = code || key;
     
     // Convert KeyR, KeyE, etc. to just the letter
     if (keyToUse && keyToUse.startsWith('Key') && keyToUse.length === 4) {
       keyToUse = keyToUse.charAt(3).toLowerCase(); // KeyR -> r
-      console.log(`🔄 Converted ${code} to ${keyToUse}`);
     }
     
     // Check if it's a modifier key being held
@@ -313,28 +220,24 @@ async function pressKey(key, modifiers = [], code = null) {
                        'Shift', 'ShiftLeft', 'ShiftRight', 'Alt', 'AltLeft', 'AltRight'].includes(key);
     
     if (isModifier) {
-      console.log(`⏸️ Skipping modifier key: ${key} (modifiers should be held, not pressed alone)`);
-      return { success: true };
+      return { success: true }; // Skip modifier keys
     }
 
     // Check if we have this key in our keyMap
     if (keyMap[keyToUse]) {
       // Use keyboard.pressKey for mapped keys
       await keyboard.pressKey(keyMap[keyToUse]);
-      console.log(`✅ Key pressed from map: ${keyToUse}`);
     } else if (keyToUse && keyToUse.length === 1) {
       // Single character - just type it
       await keyboard.type(keyToUse);
-      console.log(`✅ Character typed: ${keyToUse}`);
     } else {
       // Fallback: try to type the original key
       await keyboard.type(key);
-      console.log(`✅ Key typed (fallback): ${key}`);
     }
 
     return { success: true };
   } catch (error) {
-    console.error(`❌ Key press failed for key="${key}", code="${code}":`, error.message);
+    console.error(`❌ Key press failed for key="${key}":`, error.message);
     return { success: false, error: error.message };
   }
 }
@@ -414,6 +317,182 @@ async function selectAllText() {
   }
 }
 
+// Mouse wheel scroll functionality
+async function scrollWheel(x, y, deltaX, deltaY, screenWidth, screenHeight, remoteWidth, remoteHeight) {
+  const logs = [];
+  
+  try {
+    // Detect Windows display scaling and adjust coordinates accordingly
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const scaleFactor = primaryDisplay.scaleFactor;
+    
+    // Calculate scroll position using the same scaling logic as mouse movement
+    let finalX, finalY;
+    
+    if (process.platform === 'win32' && scaleFactor > 1) {
+      // On Windows with display scaling, use physical coordinates
+      const physicalWidth = screenWidth * scaleFactor;
+      const physicalHeight = screenHeight * scaleFactor;
+      
+      const scaleX = physicalWidth / remoteWidth;
+      const scaleY = physicalHeight / remoteHeight;
+      
+      finalX = Math.round(x * scaleX);
+      finalY = Math.round(y * scaleY);
+    } else {
+      // For other platforms or no scaling, use logical coordinates
+      const scaleX = screenWidth / remoteWidth;
+      const scaleY = screenHeight / remoteHeight;
+      
+      finalX = Math.round(x * scaleX);
+      finalY = Math.round(y * scaleY);
+    }
+    
+    // Clamp to appropriate bounds based on scaling
+    let maxX, maxY;
+    if (process.platform === 'win32' && scaleFactor > 1) {
+      maxX = screenWidth * scaleFactor - 1;
+      maxY = screenHeight * scaleFactor - 1;
+    } else {
+      maxX = screenWidth - 1;
+      maxY = screenHeight - 1;
+    }
+    
+    const clampedX = Math.max(0, Math.min(maxX, finalX));
+    const clampedY = Math.max(0, Math.min(maxY, finalY));
+    
+    // Move mouse to scroll position first - OPTIMIZED
+    await mouse.move([new Point(clampedX, clampedY)]);
+    
+    // Perform scroll with delta values - OPTIMIZED FOR TOUCHPAD
+    // Touchpad sends very small delta values (1, 2, 3), need to multiply for visible scroll
+    let scrollAmount = Math.abs(deltaY);
+    
+    // Handle touchpad small delta values
+    if (scrollAmount <= 3) {
+      scrollAmount = Math.max(3, scrollAmount * 3); // Multiply small deltas for visibility
+    }
+    
+    // Ensure minimum scroll amount for visibility
+    scrollAmount = Math.max(scrollAmount, 3);
+    
+    console.log(`🖱️ Scroll processing: deltaY=${deltaY}, scrollAmount=${scrollAmount}`);
+    
+    if (deltaY > 0) {
+      await mouse.scrollUp(scrollAmount);
+    } else if (deltaY < 0) {
+      await mouse.scrollDown(scrollAmount);
+    }
+    
+    logs.push(`🖱️ Scrolled at (${clampedX}, ${clampedY}) with deltaY: ${deltaY}`);
+    
+    return { success: true, x: clampedX, y: clampedY, logs: logs };
+  } catch (error) {
+    const errorLog = `❌ Mouse scroll failed: ${error.message}`;
+    console.error(errorLog);
+    logs.push(errorLog);
+    
+    return { success: false, error: error.message, logs: logs };
+  }
+}
+
+// Mouse drag selection functionality
+async function mouseDragSelection(startX, startY, endX, endY, screenWidth, screenHeight, remoteWidth, remoteHeight) {
+  const logs = [];
+  
+  try {
+    const logMessage = `🖱️ mouseDragSelection called with: ${JSON.stringify({ startX, startY, endX, endY, screenWidth, screenHeight, remoteWidth, remoteHeight })}`;
+    console.log(logMessage);
+    logs.push(logMessage);
+    
+    // Detect Windows display scaling and adjust coordinates accordingly
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const scaleFactor = primaryDisplay.scaleFactor;
+    
+    console.log(`📐 Display scale factor: ${scaleFactor}`);
+    logs.push(`📐 Display scale factor: ${scaleFactor}`);
+    
+    // Calculate positions using the same scaling logic as mouse movement
+    let finalStartX, finalStartY, finalEndX, finalEndY;
+    
+    if (process.platform === 'win32' && scaleFactor > 1) {
+      // On Windows with display scaling, use physical coordinates
+      const physicalWidth = screenWidth * scaleFactor;
+      const physicalHeight = screenHeight * scaleFactor;
+      
+      const scaleX = physicalWidth / remoteWidth;
+      const scaleY = physicalHeight / remoteHeight;
+      
+      finalStartX = Math.round(startX * scaleX);
+      finalStartY = Math.round(startY * scaleY);
+      finalEndX = Math.round(endX * scaleX);
+      finalEndY = Math.round(endY * scaleY);
+    } else {
+      // For other platforms or no scaling, use logical coordinates
+      const scaleX = screenWidth / remoteWidth;
+      const scaleY = screenHeight / remoteHeight;
+      
+      finalStartX = Math.round(startX * scaleX);
+      finalStartY = Math.round(startY * scaleY);
+      finalEndX = Math.round(endX * scaleX);
+      finalEndY = Math.round(endY * scaleY);
+    }
+    
+    // Clamp to appropriate bounds based on scaling
+    let maxX, maxY;
+    if (process.platform === 'win32' && scaleFactor > 1) {
+      maxX = screenWidth * scaleFactor - 1;
+      maxY = screenHeight * scaleFactor - 1;
+    } else {
+      maxX = screenWidth - 1;
+      maxY = screenHeight - 1;
+    }
+    
+    const clampedStartX = Math.max(0, Math.min(maxX, finalStartX));
+    const clampedStartY = Math.max(0, Math.min(maxY, finalStartY));
+    const clampedEndX = Math.max(0, Math.min(maxX, finalEndX));
+    const clampedEndY = Math.max(0, Math.min(maxY, finalEndY));
+    
+    // Perform drag selection
+    console.log(`📝 Starting drag selection from (${clampedStartX}, ${clampedStartY}) to (${clampedEndX}, ${clampedEndY})`);
+    logs.push(`📝 Starting drag selection from (${clampedStartX}, ${clampedStartY}) to (${clampedEndX}, ${clampedEndY})`);
+    
+    // Move to start position
+    await mouse.move([new Point(clampedStartX, clampedStartY)]);
+    
+    // Wait a moment for mouse to reach position
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // Start drag by holding left mouse button
+    await mouse.leftClick();
+    
+    // Wait a moment for click to register
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // Drag to end position while holding button
+    await mouse.move([new Point(clampedEndX, clampedEndY)]);
+    
+    // Wait a moment for drag to complete
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // Release mouse button to complete selection
+    await mouse.leftClick();
+    
+    console.log(`✅ Mouse drag selection completed`);
+    logs.push(`✅ Mouse drag selection completed`);
+    
+    return { success: true, logs: logs };
+  } catch (error) {
+    const errorLog = `❌ Mouse drag selection failed: ${error.message}`;
+    console.error(errorLog);
+    logs.push(errorLog);
+    
+    return { success: false, error: error.message, logs: logs };
+  }
+}
+
 module.exports = { 
   moveMouse, 
   moveMouseAbsolute, 
@@ -422,5 +501,7 @@ module.exports = {
   pressKey,
   selectAndDeleteText,
   deleteSelectedText,
-  selectAllText
+  selectAllText,
+  scrollWheel,
+  mouseDragSelection
 };

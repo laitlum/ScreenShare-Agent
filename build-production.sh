@@ -12,12 +12,12 @@ check_env_vars() {
     
     if [ -z "$BACKEND_URL" ]; then
         echo "⚠️  BACKEND_URL not set, using default production URL"
-        export BACKEND_URL="https://screenshare-production.up.railway.app"
+        export BACKEND_URL="https://laitlum.lipiq.in"
     fi
     
     if [ -z "$WS_SERVER_URL" ]; then
         echo "⚠️  WS_SERVER_URL not set, using default production URL"
-        export WS_SERVER_URL="wss://screenshare-production.up.railway.app/ws"
+        export WS_SERVER_URL="wss://laitlum.lipiq.in/ws"
     fi
     
     echo "✅ Environment variables configured:"
@@ -74,8 +74,8 @@ case "${1:-build}" in
         echo "  help    - Show this help message"
         echo ""
         echo "Environment Variables:"
-        echo "  BACKEND_URL     - Backend API URL (default: https://screenshare-production.up.railway.app)"
-        echo "  WS_SERVER_URL   - WebSocket server URL (default: wss://screenshare-production.up.railway.app/ws)"
+        echo "  BACKEND_URL     - Backend API URL (default: https://laitlum.lipiq.in)"
+        echo "  WS_SERVER_URL   - WebSocket server URL (default: wss://laitlum.lipiq.in/ws)"
         echo "  NODE_ENV        - Node environment (set to 'production')"
         ;;
     *)
