@@ -5,10 +5,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "NODE_ENV=development electron .",
-    "prod": "NODE_ENV=production electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "prod": "cross-env NODE_ENV=production electron .",
     "signaling": "node signaling-server.js",
-    "signaling:prod": "NODE_ENV=production node signaling-server.js",
+    "signaling:prod": "cross-env NODE_ENV=production node signaling-server.js",
     "dev:all": "concurrently \"npm run signaling\" \"npm run dev\"",
     "prod:all": "concurrently \"npm run signaling:prod\" \"npm run prod\"",
     "build": "electron-builder -mwl",
@@ -17,7 +17,7 @@
     "build:win": "electron-builder --win nsis",
     "build:win-portable": "electron-builder --win portable",
     "build:win-zip": "electron-builder --win zip",
-    "build:prod": "NODE_ENV=production electron-builder -mwl"
+    "build:prod": "cross-env NODE_ENV=production electron-builder -mwl"
   },
   "engines": {
     "node": ">=18"
@@ -33,6 +33,7 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
     "electron": "^18.3.15",
     "electron-builder": "^24.13.3"
   },
