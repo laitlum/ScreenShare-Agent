@@ -24,29 +24,47 @@ let dashboardInterval = null;
 // Configuration - Get from electronAPI (passed from main process via preload)
 let BACKEND_URL, BACKEND_WS_URL, WS_SERVER_URL;
 
-if (window.electronAPI && window.electronAPI.config) {
-  // Use configuration from main process
-  BACKEND_URL = window.electronAPI.config.BACKEND_URL;
-  BACKEND_WS_URL = window.electronAPI.config.BACKEND_WS_URL;
-  WS_SERVER_URL = window.electronAPI.config.WS_SERVER_URL;
-  console.log("🔧 Configuration loaded from main process");
-  console.log("🔧 Backend URL:", BACKEND_URL);
-  console.log("🔧 WebSocket URL:", WS_SERVER_URL);
-} else {
-  // Fallback to development URLs if electronAPI is not available
-  BACKEND_URL = 'http://localhost:8000';
-  BACKEND_WS_URL = 'ws://localhost:8000/ws';
-  WS_SERVER_URL = 'ws://localhost:8081/ws';
-  console.warn('⚠️ electronAPI.config not available, using development URLs');
-  console.log('🔧 Backend URL:', BACKEND_URL);
+// Safe defaults: FORCE production URLs if preload is unavailable
+const FALLBACK_PROD = {
+  BACKEND_URL: 'https://laitlum.lipiq.in',
+  BACKEND_WS_URL: 'wss://laitlum.lipiq.in/ws',
+  WS_SERVER_URL: 'wss://laitlum.lipiq.in/ws',
+};
+
+try {
+  if (window.electronAPI && window.electronAPI.config) {
+    BACKEND_URL = window.electronAPI.config.BACKEND_URL || FALLBACK_PROD.BACKEND_URL;
+    BACKEND_WS_URL = window.electronAPI.config.BACKEND_WS_URL || FALLBACK_PROD.BACKEND_WS_URL;
+    WS_SERVER_URL = window.electronAPI.config.WS_SERVER_URL || FALLBACK_PROD.WS_SERVER_URL;
+    console.log("🔧 Configuration loaded from main process");
+  } else {
+    BACKEND_URL = FALLBACK_PROD.BACKEND_URL;
+    BACKEND_WS_URL = FALLBACK_PROD.BACKEND_WS_URL;
+    WS_SERVER_URL = FALLBACK_PROD.WS_SERVER_URL;
+    console.warn('⚠️ electronAPI.config not available, defaulting to PRODUCTION URLs');
+  }
+} catch (e) {
+  BACKEND_URL = FALLBACK_PROD.BACKEND_URL;
+  BACKEND_WS_URL = FALLBACK_PROD.BACKEND_WS_URL;
+  WS_SERVER_URL = FALLBACK_PROD.WS_SERVER_URL;
+  console.warn('⚠️ Failed to load config, defaulting to PRODUCTION URLs:', e?.message || e);
 }
+
+console.log('🔧 Backend URL:', BACKEND_URL);
+console.log('🔧 WebSocket URL:', WS_SERVER_URL);
 
 // Initialize the application
 function init() {
   console.log("🚀 Initializing Laitlum Antivirus Agent...");
   loadDeviceInfo();
   setupEventListeners();
+  
+  // Restore persistent session if available; only show login when not signed in
   checkPersistentSession();
+  if (!isSignedIn) {
+    showLoginModal();
+  }
+  
   updateStatus("Dashboard loaded");
 
   // Start dashboard updates
@@ -340,6 +358,8 @@ function setupEventListeners() {
 // Show login modal
 function showLoginModal() {
   const modal = document.getElementById("login-modal");
+  const dashboard = document.getElementById("dashboard");
+  
   if (modal) {
     modal.classList.remove("hidden");
     // Focus on email input
@@ -347,6 +367,11 @@ function showLoginModal() {
     if (emailInput) {
       setTimeout(() => emailInput.focus(), 100);
     }
+  }
+  
+  // Hide dashboard until logged in
+  if (dashboard) {
+    dashboard.classList.add("hidden");
   }
 }
 
@@ -626,6 +651,17 @@ async function handleLogout() {
     backendWS.close();
     backendWS = null;
   }
+
+  // Stop screen sharing and close signaling WebSocket to prevent remote control
+  stopScreenShare();
+  if (ws) {
+    ws.close();
+    ws = null;
+    console.log("🔌 Signaling WebSocket closed");
+  }
+  isWebSocketConnected = false;
+  sessionConnected = false;
+  currentSessionId = null;
 
   // Reset state
   isSignedIn = false;
@@ -1066,6 +1102,17 @@ async function handleBackendMessage(data) {
         }
       } catch (e) {
         console.error("❌ Error handling ICE from backend:", e, data);
+      }
+      break;
+    case "input-event":
+      console.log("🖱️ Received input-event from backend");
+      // Handle input event directly (backend already normalized it)
+      try {
+        const inputData = data.data || data;
+        console.log("🖱️ Input-event data:", inputData);
+        handleRemoteInput(inputData);
+      } catch (error) {
+        console.error("❌ Error handling input-event:", error);
       }
       break;
     case "viewer-input":
@@ -1510,8 +1557,14 @@ function connectToSignalingServer() {
 
     ws.onmessage = async (event) => {
       try {
+        console.log("🔷 RAW WebSocket message received:", event.data);
         const data = JSON.parse(event.data);
         console.log("📨 Signaling WebSocket message:", data.type, data);
+        
+        // ⚠️ SCROLL DEBUG: Log ALL messages to catch scroll events
+        if (data.type === "input-event" || data.type === "viewer-input" || data.action === "wheel" || data.action === "scroll") {
+          console.log("🚨 SCROLL/INPUT EVENT DETECTED!", JSON.stringify(data, null, 2));
+        }
 
         switch (data.type) {
           case "session-created":
@@ -1637,6 +1690,23 @@ async function startScreenShare(sessionId) {
     console.log("🚀 DEBUG: startScreenShare called with sessionId:", sessionId);
     console.log("🚀 DEBUG: peerConnection exists:", !!peerConnection);
     console.log("🚀 DEBUG: localStream exists:", !!localStream);
+    
+    // Clean up existing connections before creating new ones
+    if (peerConnection) {
+      console.log("🧹 Closing existing peer connection...");
+      peerConnection.close();
+      peerConnection = null;
+    }
+    
+    if (localStream) {
+      console.log("🧹 Stopping existing stream tracks...");
+      localStream.getTracks().forEach((track) => {
+        track.stop();
+        console.log("⏹️ Stopped track:", track.kind, track.label);
+      });
+      localStream = null;
+    }
+    
     // Reset signaling flags for a fresh negotiation
     remoteAnswerApplied = false;
     applyingRemoteAnswer = false;
@@ -1677,6 +1747,7 @@ async function startScreenShare(sessionId) {
           maxWidth: 1920,
           minHeight: 720,
           maxHeight: 1080,
+          maxFrameRate: 30,
         },
       },
     });
@@ -1685,6 +1756,100 @@ async function startScreenShare(sessionId) {
     console.log("🔊 Starting professional system audio capture...");
 
     let audioAdded = false;
+
+    // Windows-first: getDisplayMedia with systemAudio include
+    if (!audioAdded && navigator.userAgent.toLowerCase().includes("windows")) {
+      try {
+        console.log("🎵 Windows: requesting getDisplayMedia with systemAudio: 'include'");
+        const displayWithAudio = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: "monitor",
+            frameRate: { max: 1 },
+          },
+          audio: {
+            systemAudio: "include",
+            suppressLocalAudioPlayback: true,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+
+        const tracks = displayWithAudio.getAudioTracks();
+        if (tracks.length > 0) {
+          const existingAudioTracks = localStream.getAudioTracks();
+          existingAudioTracks.forEach((existingTrack) => {
+            localStream.removeTrack(existingTrack);
+            existingTrack.stop();
+          });
+          tracks.forEach((t) => localStream.addTrack(t));
+          // stop temporary video tracks from this capture
+          displayWithAudio.getVideoTracks().forEach((t) => t.stop());
+          audioAdded = true;
+          console.log("✅ Windows system audio track added via getDisplayMedia");
+        } else {
+          console.log("⚠️ Windows getDisplayMedia returned no audio tracks");
+        }
+      } catch (winAudioErr) {
+        console.log("⚠️ Windows getDisplayMedia systemAudio failed:", winAudioErr.message);
+      }
+    }
+
+    // Method 0: Electron/Chromium desktop loopback
+    // Safe on Electron >= 28 (WGC path); allow on Windows for v28+
+    {
+      const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "") || "";
+      const isWindows = ua.toLowerCase().includes("windows");
+      const electronMatch = ua.match(/Electron\/(\d+)/i);
+      const electronMajor = electronMatch ? parseInt(electronMatch[1], 10) : 0;
+      // Disable Windows loopback for now due to renderer instability on some devices
+      const allowWindowsLoopback = false;
+
+      if (!audioAdded && (!isWindows || allowWindowsLoopback)) {
+        try {
+          console.log(
+            "🎵 Trying native desktop loopback audio (chromeMediaSource: 'desktop')..."
+          );
+          const loopbackStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              mandatory: {
+                chromeMediaSource: "desktop",
+                chromeMediaSourceId: primaryScreen.id,
+              },
+            },
+            video: false,
+          });
+
+          const loopbackTracks = loopbackStream.getAudioTracks();
+          if (loopbackTracks.length > 0) {
+            // Remove any existing audio tracks to avoid conflicts
+            const existingAudioTracks = localStream.getAudioTracks();
+            existingAudioTracks.forEach((existingTrack) => {
+              localStream.removeTrack(existingTrack);
+              existingTrack.stop();
+              console.log("🗑️ Removed existing audio track:", existingTrack.label);
+            });
+
+            loopbackTracks.forEach((track) => {
+              localStream.addTrack(track);
+              console.log("✅ Loopback system audio track added:", track.label);
+            });
+            audioAdded = true;
+            console.log("🎉 Desktop loopback audio capture successful!");
+          } else {
+            console.log(
+              "⚠️ Loopback stream returned no audio tracks – will try other methods"
+            );
+          }
+        } catch (loopbackError) {
+          console.log("⚠️ Loopback audio not available:", loopbackError.message);
+        }
+      } else if (!audioAdded && isWindows && !allowWindowsLoopback) {
+        console.log(
+          "⏭️ Skipping native desktop loopback on Windows for older Electron; trying other methods..."
+        );
+      }
+    }
 
     // Method 1: BlackHole Virtual Audio Driver (macOS - Professional Solution)
     if (!audioAdded) {
@@ -1797,6 +1962,73 @@ async function startScreenShare(sessionId) {
         }
       } catch (stereoMixError) {
         console.log("⚠️ Stereo Mix failed:", stereoMixError.message);
+      }
+    }
+
+    // Method 2.5: VB-CABLE Virtual Audio Device (Windows - Recommended)
+    if (!audioAdded && navigator.platform.toLowerCase().includes("win")) {
+      try {
+        console.log("🎵 Checking for VB-CABLE virtual audio device...");
+        const audioDevices = await navigator.mediaDevices.enumerateDevices();
+        console.log(
+          "🎧 Available audio input devices:",
+          audioDevices
+            .filter((d) => d.kind === "audioinput")
+            .map((d) => d.label)
+        );
+
+        const vbCableDevice = audioDevices.find(
+          (device) =>
+            device.kind === "audioinput" &&
+            (device.label.toLowerCase().includes("vb-cable") ||
+              device.label.toLowerCase().includes("vb-audio") ||
+              device.label.toLowerCase().includes("cable output") ||
+              device.label.toLowerCase().includes("cable input"))
+        );
+
+        if (vbCableDevice) {
+          console.log("✅ Found VB-CABLE device:", vbCableDevice.label);
+          const vbCableStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              deviceId: { exact: vbCableDevice.deviceId },
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              sampleRate: 48000,
+              channelCount: 2,
+            },
+          });
+
+          vbCableStream.getAudioTracks().forEach((track) => {
+            // Remove any existing audio tracks to avoid conflicts
+            const existingAudioTracks = localStream.getAudioTracks();
+            existingAudioTracks.forEach((existingTrack) => {
+              localStream.removeTrack(existingTrack);
+              existingTrack.stop();
+              console.log(
+                "🗑️ Removed existing audio track:",
+                existingTrack.label
+              );
+            });
+
+            localStream.addTrack(track);
+            console.log("✅ VB-CABLE audio track added:", track.label);
+          });
+          audioAdded = true;
+          console.log("🎉 VB-CABLE audio capture successful!");
+          console.log(
+            "💡 System audio is now being captured via VB-CABLE virtual device"
+          );
+        } else {
+          console.log(
+            "⚠️ VB-CABLE not found. Download from: https://vb-audio.com/Cable/"
+          );
+          console.log(
+            "💡 VB-CABLE is free and enables automatic system audio capture without manual settings"
+          );
+        }
+      } catch (vbCableError) {
+        console.log("⚠️ VB-CABLE capture failed:", vbCableError.message);
       }
     }
 
@@ -1981,6 +2213,33 @@ async function startScreenShare(sessionId) {
     console.log("📊 Total senders:", senders.length);
     senders.forEach((sender, index) => {
       console.log(`📊 Sender ${index}:`, sender.track?.kind || "no track");
+
+      // Apply low-latency, higher quality parameters for video
+      if (sender.track && sender.track.kind === "video") {
+        try {
+          // Prefer motion for desktop/video content
+          if (typeof sender.track.contentHint !== "undefined") {
+            // Favor text sharpness for desktop sharing
+            sender.track.contentHint = "detail";
+          }
+
+          const parameters = sender.getParameters() || {};
+          parameters.encodings = parameters.encodings || [{}];
+          // Target ~2.5 Mbps; adjust if constrained by network
+          parameters.encodings[0].maxBitrate = 2_500_000; // bits per second
+          // Request more frequent keyframes to reduce recovery time
+          parameters.encodings[0].maxFramerate = 30;
+          sender.setParameters(parameters);
+
+          // Also clamp track frame rate via constraints, if supported
+          const videoTrack = sender.track;
+          if (videoTrack.applyConstraints) {
+            videoTrack.applyConstraints({ frameRate: { ideal: 30, max: 30 } }).catch(() => {});
+          }
+        } catch (e) {
+          console.log("⚠️ Could not set video sender parameters:", e.message);
+        }
+      }
     });
 
     // Handle ICE candidates

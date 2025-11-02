@@ -34,7 +34,7 @@
   "devDependencies": {
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
-    "electron": "^18.3.15",
+    "electron": "^30.0.8",
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
@@ -79,18 +79,6 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
           "target": "zip",
           "arch": [
             "x64"
@@ -99,7 +87,13 @@
       ],
       "requestedExecutionLevel": "asInvoker",
       "signAndEditExecutable": false,
-      "signDlls": false
+      "signDlls": false,
+      "verifyUpdateCodeSignature": false,
+      "certificateFile": null,
+      "certificatePassword": null,
+      "publisherName": "Laitlum Technologies",
+      "fileAssociations": [],
+      "icon": null
     },
     "nsis": {
       "oneClick": false,

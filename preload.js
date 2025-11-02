@@ -1,5 +1,21 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const runtimeConfig = require("./config");
+
+// Load runtime config safely; default to PRODUCTION URLs if require fails
+let runtimeConfig;
+try {
+  runtimeConfig = require("./config");
+  console.log("🔧 Preload: loaded runtime config from ./config");
+} catch (e) {
+  console.warn(
+    "⚠️ Preload: failed to load ./config, defaulting to PRODUCTION URLs:",
+    e?.message || e
+  );
+  runtimeConfig = {
+    BACKEND_URL: "https://laitlum.lipiq.in",
+    BACKEND_WS_URL: "wss://laitlum.lipiq.in/ws",
+    WS_SERVER_URL: "wss://laitlum.lipiq.in/ws",
+  };
+}
 
 let desktopCapturer;
 

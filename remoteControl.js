@@ -379,10 +379,15 @@ async function scrollWheel(x, y, deltaX, deltaY, screenWidth, screenHeight, remo
     
     console.log(`🖱️ Scroll processing: deltaY=${deltaY}, scrollAmount=${scrollAmount}`);
     
+    // ✅ FIXED: Inverted scroll direction
+    // When user scrolls DOWN (deltaY positive), page should scroll DOWN
+    // When user scrolls UP (deltaY negative), page should scroll UP
     if (deltaY > 0) {
-      await mouse.scrollUp(scrollAmount);
-    } else if (deltaY < 0) {
       await mouse.scrollDown(scrollAmount);
+      console.log(`⬇️ Scrolling DOWN with amount: ${scrollAmount}`);
+    } else if (deltaY < 0) {
+      await mouse.scrollUp(scrollAmount);
+      console.log(`⬆️ Scrolling UP with amount: ${scrollAmount}`);
     }
     
     logs.push(`🖱️ Scrolled at (${clampedX}, ${clampedY}) with deltaY: ${deltaY}`);

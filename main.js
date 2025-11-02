@@ -39,6 +39,21 @@ if (process.platform === "win32") {
   console.log("🏷️ Windows App User Model ID set to: com.laitlum.antivirus");
 }
 
+// Enable modern capture flags that help with system audio via getDisplayMedia on Windows
+try {
+  app.commandLine.appendSwitch(
+    "enable-features",
+    [
+      "MediaStream-SystemAudioCapture",
+      "WebRtcAllowWgcScreenCapture",
+      "GetDisplayMediaSet",
+    ].join(",")
+  );
+  app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+} catch (e) {
+  console.log("⚠️ Could not set Chromium flags:", e?.message || e);
+}
+
 let mainWindow;
 let tray;
 let ws;
@@ -777,19 +792,35 @@ ipcMain.handle("send-remote-input", async (event, inputData) => {
 
 // Handle input events from viewer
 async function handleInput(data, event = null) {
+  // Coalesce high-frequency mouse move events to reduce latency/backlog
+  // Shared state across calls
+  if (!global.__mouseMoveState) {
+    global.__mouseMoveState = { inProgress: false, pending: null };
+  }
   try {
     const { width, height } = screen.getPrimaryDisplay().bounds;
 
     if (data.action === "mousemove" || data.action === "move") {
-      // OPTIMIZED: Direct mouse movement without excessive logging
-      await moveMouse(
-        data.x,
-        data.y,
-        width,
-        height,
-        data.remoteWidth || width,
-        data.remoteHeight || height
-      );
+      const state = global.__mouseMoveState;
+      if (state.inProgress) {
+        state.pending = data; // keep only latest
+        return;
+      }
+      state.inProgress = true;
+      let current = data;
+      do {
+        await moveMouse(
+          current.x,
+          current.y,
+          width,
+          height,
+          current.remoteWidth || width,
+          current.remoteHeight || height
+        );
+        current = state.pending;
+        state.pending = null;
+      } while (current);
+      state.inProgress = false;
     }
 
     // Handle click events - process both "click" and "mouseup" actions
