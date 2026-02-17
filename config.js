@@ -1,13 +1,12 @@
 // Environment-based configuration for Electron Agent
-const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// Production URLs - ALWAYS use these unless explicitly in development
+// Production URLs - Using localhost for local testing
 const PRODUCTION_URLS = {
-  BACKEND_URL: 'https://laitlum.lipiq.in',
-  BACKEND_WS_URL: 'wss://laitlum.lipiq.in/ws',
-  WS_SERVER_URL: 'wss://laitlum.lipiq.in/ws',
+  BACKEND_URL: 'http://localhost:8000',
+  BACKEND_WS_URL: 'ws://localhost:8000/ws',
+  WS_SERVER_URL: 'ws://localhost:8081/ws',
 };
 
 const DEVELOPMENT_URLS = {
@@ -63,9 +62,6 @@ if (isDevelopment) {
     WS_SERVER_URL: process.env.WS_SERVER_URL || PRODUCTION_URLS.WS_SERVER_URL,
   };
   console.log('🚀 Running in PRODUCTION mode');
-  if (app && app.isPackaged) {
-    console.log('📦 Packaged application detected');
-  }
 }
 
 console.log(`🔧 Electron Agent Environment: ${environment}`);

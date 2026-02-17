@@ -216,20 +216,34 @@ function updateDeviceDisplay() {
 function setupEventListeners() {
   console.log("🎛️ Setting up event listeners...");
 
-  // View menu functionality
+  // Menu functionality
+  const fileMenuBtn = document.getElementById("file-menu-btn");
+  const fileDropdown = document.getElementById("file-dropdown");
   const viewMenuBtn = document.getElementById("view-menu-btn");
   const viewDropdown = document.getElementById("view-dropdown");
   const toolsMenuBtn = document.getElementById("tools-menu-btn");
   const toolsDropdown = document.getElementById("tools-dropdown");
   const helpMenuBtn = document.getElementById("help-menu-btn");
   const helpDropdown = document.getElementById("help-dropdown");
+  const settingsDropdown = document.getElementById("settings-dropdown");
   const addScreenMenu = document.getElementById("add-screen-menu");
 
   // Close all dropdowns function
   function closeAllDropdowns() {
+    if (fileDropdown) fileDropdown.classList.add("hidden");
     if (viewDropdown) viewDropdown.classList.add("hidden");
     if (toolsDropdown) toolsDropdown.classList.add("hidden");
     if (helpDropdown) helpDropdown.classList.add("hidden");
+    if (settingsDropdown) settingsDropdown.classList.add("hidden");
+  }
+
+  // File menu toggle
+  if (fileMenuBtn && fileDropdown) {
+    fileMenuBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      closeAllDropdowns();
+      fileDropdown.classList.toggle("hidden");
+    });
   }
 
   // View menu toggle
@@ -262,19 +276,56 @@ function setupEventListeners() {
   // Close dropdown when clicking outside
   document.addEventListener("click", function (e) {
     if (
+      !document.getElementById("file-menu")?.contains(e.target) &&
       !document.getElementById("view-menu")?.contains(e.target) &&
       !document.getElementById("tools-menu")?.contains(e.target) &&
-      !document.getElementById("help-menu")?.contains(e.target)
+      !document.getElementById("help-menu")?.contains(e.target) &&
+      !document.getElementById("settings-menu")?.contains(e.target)
     ) {
       closeAllDropdowns();
     }
   });
 
+  // Window control buttons
+  const winMinimizeBtn = document.getElementById("win-minimize");
+  const winMaximizeBtn = document.getElementById("win-maximize");
+  const winCloseBtn = document.getElementById("win-close");
+
+  if (winMinimizeBtn && window.electronAPI) {
+    winMinimizeBtn.addEventListener("click", async function () {
+      try {
+        await window.electronAPI.minimizeWindow();
+      } catch (error) {
+        console.error("Error minimizing window:", error);
+      }
+    });
+  }
+
+  if (winMaximizeBtn && window.electronAPI) {
+    winMaximizeBtn.addEventListener("click", async function () {
+      try {
+        await window.electronAPI.maximizeWindow();
+      } catch (error) {
+        console.error("Error maximizing window:", error);
+      }
+    });
+  }
+
+  if (winCloseBtn && window.electronAPI) {
+    winCloseBtn.addEventListener("click", async function () {
+      try {
+        await window.electronAPI.closeWindow();
+      } catch (error) {
+        console.error("Error closing window:", error);
+      }
+    });
+  }
+
   // Add Screen menu item
   if (addScreenMenu) {
     addScreenMenu.addEventListener("click", function (e) {
       e.preventDefault();
-      viewDropdown.classList.add("hidden"); // Close dropdown
+      closeAllDropdowns(); // Close all dropdowns
       if (isSignedIn && userEmail) {
         // Show user menu or logout option
         showUserMenu();
@@ -583,14 +634,17 @@ function setupSettingsMenu() {
     if (settingsMenuBtn && settingsDropdown) {
         settingsMenuBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            // Close other dropdowns
+            const fileDropdown = document.getElementById("file-dropdown");
+            const viewDropdown = document.getElementById("view-dropdown");
+            const toolsDropdown = document.getElementById("tools-dropdown");
+            const helpDropdown = document.getElementById("help-dropdown");
+            if (fileDropdown) fileDropdown.classList.add("hidden");
+            if (viewDropdown) viewDropdown.classList.add("hidden");
+            if (toolsDropdown) toolsDropdown.classList.add("hidden");
+            if (helpDropdown) helpDropdown.classList.add("hidden");
+            // Toggle settings dropdown
             settingsDropdown.classList.toggle('hidden');
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!settingsMenuBtn.contains(e.target) && !settingsDropdown.contains(e.target)) {
-                settingsDropdown.classList.add('hidden');
-            }
         });
     }
 

@@ -124,22 +124,40 @@ server.listen(PORT, '0.0.0.0', () => {
   }
 });
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
   console.log('🔌 New client connected');
-  
+
+  // Extract query parameters from WebSocket connection URL
+  const parsedUrl = url.parse(req.url, true);
+  const queryParams = parsedUrl.query;
+  const deviceIdFromQuery = queryParams.device_id;
+  const roleFromQuery = queryParams.role;
+
+  console.log('🔍 Connection query params:', { device_id: deviceIdFromQuery, role: roleFromQuery });
+
+  // Store device ID on the WebSocket connection
+  ws.deviceId = deviceIdFromQuery;
+
   ws.on("message", (msg) => {
     try {
       const data = JSON.parse(msg);
       console.log('📨 Received message:', data.type, 'for session:', data.sessionId);
-      
+
       if (data.type === "create-session") {
-        // Use the provided sessionId or generate a new one
-        const sessionId = data.sessionId || generateSessionId();
-        sessions[sessionId] = { agent: ws, viewer: null, createdAt: Date.now() };
+        // Use device_id from query params as session ID if available (for agent connections)
+        // Add "session_" prefix to match viewer expectations
+        let sessionId;
+        if (ws.deviceId) {
+          sessionId = `session_${ws.deviceId}`;
+        } else {
+          sessionId = data.sessionId || generateSessionId();
+        }
+
+        sessions[sessionId] = { agent: ws, viewer: null, createdAt: Date.now(), deviceId: ws.deviceId };
         ws.sessionId = sessionId;
         ws.role = "agent";
         ws.send(JSON.stringify({ type: "session-created", sessionId }));
-        console.log('🤖 Agent created session:', sessionId);
+        console.log('🤖 Agent created session:', sessionId, '(device_id:', ws.deviceId, ')');
       }
       
       if ((data.type === "join-session" || data.type === "join-device-session") && sessions[data.sessionId]) {
@@ -155,24 +173,28 @@ wss.on("connection", (ws) => {
       
       // Handle device session joining - viewer sends device ID, we need to find matching session
       if (data.type === "join-device-session") {
-        // data.sessionId is something like "device-id_20250830224636"
-        // We need to find a session that matches this device ID
-        const deviceId = data.sessionId; // This is already "device-id_20250830224636"
-        console.log('🔍 Looking for device session with ID:', deviceId);
-        
-        if (sessions[deviceId]) {
-          sessions[deviceId].viewer = ws;
-          ws.sessionId = deviceId;
+        // Extract deviceId and sessionId from nested data object
+        const deviceId = data.data?.deviceId || data.deviceId;
+        const sessionId = data.data?.sessionId || data.sessionId;
+
+        console.log('🔍 Looking for device session with deviceId:', deviceId, 'sessionId:', sessionId);
+
+        // Try to find the session using either sessionId or deviceId
+        const sessionKey = sessionId || deviceId;
+
+        if (sessions[sessionKey]) {
+          sessions[sessionKey].viewer = ws;
+          ws.sessionId = sessionKey;
           ws.role = "viewer";
-          ws.send(JSON.stringify({ type: "viewer-joined", sessionId: deviceId }));
-          if (sessions[deviceId].agent) {
-            sessions[deviceId].agent.send(JSON.stringify({ type: "viewer-joined", sessionId: deviceId }));
+          ws.send(JSON.stringify({ type: "viewer-joined", sessionId: sessionKey }));
+          if (sessions[sessionKey].agent) {
+            sessions[sessionKey].agent.send(JSON.stringify({ type: "viewer-joined", sessionId: sessionKey }));
           }
-          console.log('👁️ Viewer joined device session:', deviceId);
+          console.log('👁️ Viewer joined device session:', sessionKey);
         } else {
-          console.log('❌ Device session not found:', deviceId);
+          console.log('❌ Device session not found:', sessionKey);
           console.log('📋 Available sessions:', Object.keys(sessions));
-          ws.send(JSON.stringify({ type: "error", message: "Session not found" }));
+          ws.send(JSON.stringify({ type: "session-error", message: "Session not found. Please ensure the agent is running." }));
         }
       }
       

@@ -85,6 +85,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     title: "Laitlum Antivirus - Advanced Protection",
+    icon: path.join(__dirname, "logo.png"), // Custom logo for taskbar and window
     show: true, // Force window to be visible
     center: true, // Center the window
     alwaysOnTop: false, // Don't keep on top
@@ -92,7 +93,7 @@ function createWindow() {
     closable: true,
     skipTaskbar: false, // Show in taskbar with proper name
     // Ensure the app name is properly set in window
-    titleBarStyle: "default",
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -105,6 +106,8 @@ function createWindow() {
       allowRunningInsecureContent: true,
     },
   });
+
+  mainWindow.setMenuBarVisibility(false);
 
   // The renderer uses renderer-permanent.js; a minimal HTML will attach to it.
   mainWindow.loadFile(path.join(__dirname, "renderer.html"));
@@ -166,10 +169,8 @@ function createWindow() {
 }
 
 function createSystemTray() {
-  // Create a simple tray icon (you can replace this with a custom icon file)
-  const icon = nativeImage.createFromDataURL(
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFYSURBVDiNpZM9SwNBEIafgwQLwcJCG1sLwcJCG0uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQG2uxsLBQsLGwsLBQ"
-  );
+  // Use custom logo for tray icon
+  const icon = nativeImage.createFromPath(path.join(__dirname, "logo.png"));
 
   tray = new Tray(icon);
 
@@ -964,6 +965,29 @@ ipcMain.handle("get-background-status", async () => {
     console.error("❌ Error getting background status:", error.message);
     return { success: false, error: error.message };
   }
+});
+
+// Window control IPC handlers (for custom title bar)
+ipcMain.handle("window-minimize", () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.handle("window-maximize", () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.handle("window-close", () => {
+  if (mainWindow) mainWindow.close();
+});
+
+ipcMain.handle("window-is-maximized", () => {
+  return mainWindow ? mainWindow.isMaximized() : false;
 });
 
 console.log("🚀 Electron main process ready!");

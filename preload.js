@@ -111,6 +111,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   showFromBackground: () => ipcRenderer.invoke("show-from-background"),
   getBackgroundStatus: () => ipcRenderer.invoke("get-background-status"),
 
+  // Window controls (custom title bar)
+  windowMinimize: () => ipcRenderer.invoke("window-minimize"),
+  windowMaximize: () => ipcRenderer.invoke("window-maximize"),
+  windowClose: () => ipcRenderer.invoke("window-close"),
+  windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
+
   // Utility
   isAvailable: () => true,
 

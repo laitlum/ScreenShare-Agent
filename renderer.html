@@ -11,23 +11,29 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: '#0f172a',
-                        secondary: '#10b981',
-                        accent: '#3b82f6',
+                        primary: '#0078D4',
+                        secondary: '#107C10',
+                        accent: '#8661C5',
                         warning: '#f59e0b',
                         danger: '#ef4444',
-                        dark: '#1e293b',
-                        darker: '#0f172a',
-                        glass: 'rgba(255, 255, 255, 0.1)',
-                        'glass-border': 'rgba(255, 255, 255, 0.2)'
+                        surface: '#FFFFFF',
+                        'surface-secondary': '#FAFAFA',
+                        'surface-tertiary': '#F5F5F5',
+                        glass: 'rgba(255, 255, 255, 0.9)',
+                        'glass-border': 'rgba(0, 0, 0, 0.08)',
+                        'text-primary': '#242424',
+                        'text-secondary': '#616161',
+                        'text-tertiary': '#8A8A8A',
+                        'border-subtle': '#E0E0E0',
+                        'border-light': '#F0F0F0'
                     },
                     backdropBlur: {
                         'xs': '2px',
                     },
                     boxShadow: {
-                        'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
-                        'neo-inset': 'inset 5px 5px 10px #0a0e1a, inset -5px -5px 10px #1e2a42',
-                        'neo-outset': '5px 5px 10px #0a0e1a, -5px -5px 10px #1e2a42'
+                        'fluent': '0 1.6px 3.6px 0 rgba(0,0,0,.132), 0 0.3px 0.9px 0 rgba(0,0,0,.108)',
+                        'fluent-elevated': '0 6.4px 14.4px 0 rgba(0,0,0,.132), 0 1.2px 3.6px 0 rgba(0,0,0,.108)',
+                        'fluent-card': '0 3.2px 7.2px 0 rgba(0,0,0,.132), 0 0.6px 1.8px 0 rgba(0,0,0,.108)'
                     }
                 }
             }
@@ -35,23 +41,32 @@
     </script>
     <style>
         .glass {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(0, 0, 0, 0.08);
         }
 
-        .neo {
-            background: linear-gradient(145deg, #1e293b, #0f172a);
-            box-shadow: 5px 5px 10px #0a0e1a, -5px -5px 10px #1e2a42;
+        .fluent-card {
+            background: #FFFFFF;
+            box-shadow: 0 3.2px 7.2px 0 rgba(0,0,0,.132), 0 0.6px 1.8px 0 rgba(0,0,0,.108);
         }
 
-        .neo-inset {
-            background: linear-gradient(145deg, #0f172a, #1e293b);
-            box-shadow: inset 5px 5px 10px #0a0e1a, inset -5px -5px 10px #1e2a42;
+        .fluent-surface {
+            background: #FAFAFA;
+            box-shadow: 0 1.6px 3.6px 0 rgba(0,0,0,.132), 0 0.3px 0.9px 0 rgba(0,0,0,.108);
+        }
+
+        .fluent-elevated {
+            background: #FFFFFF;
+            box-shadow: 0 6.4px 14.4px 0 rgba(0,0,0,.132), 0 1.2px 3.6px 0 rgba(0,0,0,.108);
         }
 
         .gradient-bg {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            background: linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 50%, #FFFFFF 100%);
+        }
+
+        .hero-gradient {
+            background: linear-gradient(135deg, #E3F2FD 0%, #F3E5F5 50%, #E8F5E9 100%);
         }
 
         .scan-animation {
@@ -63,7 +78,7 @@
             0%,
             100% {
                 transform: translateY(0);
-                opacity: 0.5;
+                opacity: 0.7;
             }
 
             50% {
@@ -80,209 +95,243 @@
 
             0%,
             100% {
-                box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+                box-shadow: 0 0 20px rgba(0, 120, 212, 0.3);
             }
 
             50% {
-                box-shadow: 0 0 40px rgba(16, 185, 129, 0.8);
+                box-shadow: 0 0 40px rgba(0, 120, 212, 0.5);
             }
         }
 
         /* Menu dropdown styles */
         .menu-dropdown {
             backdrop-filter: blur(20px);
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         }
 
         .menu-item:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(0, 120, 212, 0.08);
+        }
+
+        /* Custom title bar - VS Code style */
+        .titlebar {
+            -webkit-app-region: drag;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            background: #F3F3F3;
+            border-bottom: 1px solid #E0E0E0;
+            user-select: none;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .titlebar-nodrag {
+            -webkit-app-region: no-drag;
+        }
+
+        .titlebar .menu-btn {
+            padding: 0 10px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            font-size: 12.5px;
+            color: #333;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+        }
+
+        .titlebar .menu-btn:hover {
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        .titlebar .window-controls {
+            display: flex;
+            margin-left: auto;
+            height: 32px;
+        }
+
+        .titlebar .window-controls button {
+            width: 46px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            color: #333;
+        }
+
+        .titlebar .window-controls button:hover {
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        .titlebar .window-controls button.close-btn:hover {
+            background: #E81123;
+            color: white;
+        }
+
+        .titlebar .window-controls button svg {
+            width: 10px;
+            height: 10px;
         }
     </style>
 </head>
 
-<body class="gradient-bg font-sans text-white min-h-screen">
+<body class="gradient-bg font-sans text-text-primary min-h-screen">
     <div class="min-h-screen">
-        <!-- Top Navigation Bar -->
-        <nav class="glass border-b border-glass-border px-6 py-4 sticky top-0 z-50">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 neo rounded-xl flex items-center justify-center pulse-glow">
-                        <svg class="w-6 h-6 text-secondary" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="text-xl font-bold text-white">Laitlum Antivirus</h1>
-                        <p class="text-xs text-gray-400">Advanced Protection Suite</p>
+        <!-- Combined Title Bar (VS Code style) -->
+        <div class="titlebar">
+            <!-- App Icon -->
+            <div class="titlebar-nodrag flex items-center px-2">
+                <img src="logo.png" class="w-4 h-4" alt="Laitlum Antivirus" />
+            </div>
+
+            <!-- Menu Items -->
+            <div class="titlebar-nodrag flex items-center">
+                <!-- File Menu -->
+                <div class="relative" id="file-menu">
+                    <button id="file-menu-btn" class="menu-btn">File</button>
+                    <div id="file-dropdown" class="absolute top-full left-0 menu-dropdown z-[200] w-48 hidden">
+                        <div class="py-1">
+                            <button id="add-screen-menu"
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 flex items-center space-x-2 text-text-primary">
+                                <span>Add Screen</span>
+                            </button>
+                            <div class="border-t border-border-subtle mx-2 my-1"></div>
+                            <button id="minimize-to-background"
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 flex items-center space-x-2 text-text-primary">
+                                <span>Run in Background</span>
+                            </button>
+                            <div class="border-t border-border-subtle mx-2 my-1"></div>
+                            <button id="logout-btn"
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 flex items-center space-x-2 text-danger">
+                                <span>Logout</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <!-- Menu Bar -->
-                    <div class="flex items-center space-x-2">
-                        <!-- View Menu -->
-                        <div class="relative" id="view-menu">
-                            <button id="view-menu-btn"
-                                class="glass px-3 py-2 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 text-sm">
-                                View
-                            </button>
-                            <!-- View Dropdown -->
-                            <div id="view-dropdown"
-                                class="absolute top-full left-0 mt-1 menu-dropdown rounded-lg shadow-lg z-50 w-48 hidden">
-                                <div class="py-1">
-                                    <button id="add-screen-menu"
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                        </svg>
-                                        <span>Add Screen</span>
-                                    </button>
-                                    <button
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                        <span>Preferences</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- Tools Menu -->
-                        <div class="relative" id="tools-menu">
-                            <button id="tools-menu-btn"
-                                class="glass px-3 py-2 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 text-sm">
-                                Tools
+                <!-- View Menu -->
+                <div class="relative" id="view-menu">
+                    <button id="view-menu-btn" class="menu-btn">View</button>
+                    <div id="view-dropdown" class="absolute top-full left-0 menu-dropdown z-[200] w-48 hidden">
+                        <div class="py-1">
+                            <button
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 text-text-primary">
+                                <span>Dashboard</span>
                             </button>
-                            <!-- Tools Dropdown -->
-                            <div id="tools-dropdown"
-                                class="absolute top-full left-0 mt-1 menu-dropdown rounded-lg shadow-lg z-50 w-48 hidden">
-                                <div class="py-1">
-                                    <button id="minimize-to-background"
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M20 12H4m16 0l-4-4m4 4l-4 4" />
-                                        </svg>
-                                        <span>Run in Background</span>
-                                    </button>
-                                    <button
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                        <span>Settings</span>
-                                    </button>
-                                    <button
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                        </svg>
-                                        <span>Diagnostics</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Help Menu -->
-                        <div class="relative" id="help-menu">
-                            <button id="help-menu-btn"
-                                class="glass px-3 py-2 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 text-sm">
-                                Help
+                            <button
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 text-text-primary">
+                                <span>Preferences</span>
                             </button>
-                            <!-- Help Dropdown -->
-                            <div id="help-dropdown"
-                                class="absolute top-full left-0 mt-1 menu-dropdown rounded-lg shadow-lg z-50 w-48 hidden">
-                                <div class="py-1">
-                                    <button
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span>About</span>
-                                    </button>
-                                    <button
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                        </svg>
-                                        <span>Documentation</span>
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- User Status -->
-                    <div class="flex items-center space-x-3">
-                        <span id="user-display" class="text-sm text-gray-300">👤 Not Connected</span>
-                        <div id="settings-menu" class="relative">
-                            <button id="settings-menu-btn" class="glass p-2 rounded-lg hover:bg-white/20 transition-all duration-300">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
-                                    </path>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
+                <!-- Tools Menu -->
+                <div class="relative" id="tools-menu">
+                    <button id="tools-menu-btn" class="menu-btn">Tools</button>
+                    <div id="tools-dropdown" class="absolute top-full left-0 menu-dropdown z-[200] w-48 hidden">
+                        <div class="py-1">
+                            <button
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 text-text-primary">
+                                <span>Settings</span>
                             </button>
-                            
-                            <!-- Settings Dropdown -->
-                            <div id="settings-dropdown"
-                                class="absolute top-full right-0 mt-1 menu-dropdown rounded-lg shadow-lg z-50 w-48 hidden">
-                                <div class="py-1">
-                                    <button id="logout-btn"
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2 text-red-400 hover:text-red-300">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                                        </svg>
-                                        <span>Logout</span>
-                                    </button>
-                                    <button
-                                        class="w-full text-left px-4 py-2 text-sm menu-item transition-all duration-200 flex items-center space-x-2">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                                        </svg>
-                                        <span>Preferences</span>
-                                    </button>
-                                </div>
-                            </div>
+                            <button
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 text-text-primary">
+                                <span>Diagnostics</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Menu -->
+                <div class="relative" id="help-menu">
+                    <button id="help-menu-btn" class="menu-btn">Help</button>
+                    <div id="help-dropdown" class="absolute top-full left-0 menu-dropdown z-[200] w-48 hidden">
+                        <div class="py-1">
+                            <button
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 text-text-primary">
+                                <span>About</span>
+                            </button>
+                            <button
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 text-text-primary">
+                                <span>Documentation</span>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
-        </nav>
+
+            <!-- Title (centered in drag region) -->
+            <div class="flex-1 text-center">
+                <span class="text-xs text-text-tertiary">Laitlum Antivirus - Advanced Protection</span>
+            </div>
+
+            <!-- User Status -->
+            <div class="titlebar-nodrag flex items-center px-2">
+                <span id="user-display" class="text-xs text-text-secondary mr-2">Not Connected</span>
+                <!-- Settings -->
+                <div id="settings-menu" class="relative">
+                    <button id="settings-menu-btn" class="menu-btn px-2">
+                        <svg class="w-3.5 h-3.5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </button>
+                    <div id="settings-dropdown" class="absolute top-full right-0 menu-dropdown z-[200] w-48 hidden">
+                        <div class="py-1">
+                            <button
+                                class="w-full text-left px-3 py-1.5 text-[12.5px] menu-item transition-all duration-150 text-text-primary">
+                                <span>Preferences</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Window Controls (minimize, maximize, close) -->
+            <div class="titlebar-nodrag window-controls">
+                <button id="win-minimize" title="Minimize">
+                    <svg viewBox="0 0 10 1" fill="currentColor"><rect width="10" height="1"/></svg>
+                </button>
+                <button id="win-maximize" title="Maximize">
+                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="9" height="9"/></svg>
+                </button>
+                <button id="win-close" class="close-btn" title="Close">
+                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></svg>
+                </button>
+            </div>
+        </div>
 
         <!-- Main Dashboard -->
         <div id="dashboard" class="p-6">
             <!-- Threat Status Banner -->
-            <div class="glass rounded-2xl p-6 mb-8 border border-secondary/30">
+            <div class="hero-gradient rounded-2xl p-6 mb-8 border border-primary/20 shadow-fluent-elevated">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-4">
-                        <div class="w-16 h-16 neo rounded-full flex items-center justify-center pulse-glow">
-                            <svg class="w-8 h-8 text-secondary" fill="currentColor" viewBox="0 0 24 24">
+                        <div class="w-16 h-16 fluent-elevated rounded-full flex items-center justify-center pulse-glow">
+                            <svg class="w-8 h-8 text-primary" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
                             </svg>
                         </div>
                         <div>
-                            <h2 class="text-2xl font-bold text-secondary" id="protection-banner-status">System Protected
+                            <h2 class="text-2xl font-bold text-primary" id="protection-banner-status">System Protected
                             </h2>
-                            <p class="text-gray-400" id="protection-banner-desc">Real-time protection is active</p>
+                            <p class="text-text-secondary" id="protection-banner-desc">Real-time protection is active</p>
                         </div>
                     </div>
                     <button id="quick-scan-btn"
-                        class="neo px-6 py-3 rounded-xl font-medium text-secondary hover:shadow-neo-outset transition-all duration-300">
+                        class="fluent-elevated px-6 py-3 rounded-xl font-medium text-primary hover:shadow-fluent-card transition-all duration-300">
                         Quick Scan
                     </button>
                 </div>
@@ -291,24 +340,24 @@
             <!-- Security Status Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <!-- Antivirus Status -->
-                <div class="glass rounded-2xl p-6 hover:bg-white/20 transition-all duration-300">
+                <div class="fluent-card rounded-2xl p-6 hover:shadow-fluent-elevated transition-all duration-300">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="w-12 h-12 neo-inset rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-secondary" fill="currentColor" viewBox="0 0 24 24">
+                        <div class="w-12 h-12 fluent-surface rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-primary" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
                             </svg>
                         </div>
-                        <span class="w-3 h-3 bg-secondary rounded-full pulse-glow"></span>
+                        <span class="w-3 h-3 bg-primary rounded-full pulse-glow"></span>
                     </div>
-                    <h3 class="font-semibold text-white mb-1">Antivirus</h3>
-                    <p class="text-sm text-secondary" id="antivirus-status">Protected</p>
-                    <p class="text-xs text-gray-400 mt-2" id="virus-definitions">Definitions: Updated</p>
+                    <h3 class="font-semibold text-text-primary mb-1">Antivirus</h3>
+                    <p class="text-sm text-primary" id="antivirus-status">Protected</p>
+                    <p class="text-xs text-text-tertiary mt-2" id="virus-definitions">Definitions: Updated</p>
                 </div>
 
                 <!-- System Boost -->
-                <div class="glass rounded-2xl p-6 hover:bg-white/20 transition-all duration-300">
+                <div class="fluent-card rounded-2xl p-6 hover:shadow-fluent-elevated transition-all duration-300">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="w-12 h-12 neo-inset rounded-xl flex items-center justify-center">
+                        <div class="w-12 h-12 fluent-surface rounded-xl flex items-center justify-center">
                             <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -316,15 +365,15 @@
                         </div>
                         <span class="w-3 h-3 bg-accent rounded-full pulse-glow"></span>
                     </div>
-                    <h3 class="font-semibold text-white mb-1">System Boost</h3>
+                    <h3 class="font-semibold text-text-primary mb-1">System Boost</h3>
                     <p class="text-sm text-accent" id="system-boost-status">Optimized</p>
-                    <p class="text-xs text-gray-400 mt-2" id="boost-improvement">Speed: +24%</p>
+                    <p class="text-xs text-text-tertiary mt-2" id="boost-improvement">Speed: +24%</p>
                 </div>
 
                 <!-- Real-time Scanning -->
-                <div class="glass rounded-2xl p-6 hover:bg-white/20 transition-all duration-300">
+                <div class="fluent-card rounded-2xl p-6 hover:shadow-fluent-elevated transition-all duration-300">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="w-12 h-12 neo-inset rounded-xl flex items-center justify-center">
+                        <div class="w-12 h-12 fluent-surface rounded-xl flex items-center justify-center">
                             <svg class="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -332,26 +381,26 @@
                         </div>
                         <span class="w-3 h-3 bg-warning rounded-full pulse-glow"></span>
                     </div>
-                    <h3 class="font-semibold text-white mb-1">Real-time Scan</h3>
+                    <h3 class="font-semibold text-text-primary mb-1">Real-time Scan</h3>
                     <p class="text-sm text-warning" id="realtime-status">Active</p>
-                    <p class="text-xs text-gray-400 mt-2" id="files-scanned">Files: 1,247,892</p>
+                    <p class="text-xs text-text-tertiary mt-2" id="files-scanned">Files: 1,247,892</p>
                 </div>
 
                 <!-- Background Service -->
-                <div class="glass rounded-2xl p-6 hover:bg-white/20 transition-all duration-300">
+                <div class="fluent-card rounded-2xl p-6 hover:shadow-fluent-elevated transition-all duration-300">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="w-12 h-12 neo-inset rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="w-12 h-12 fluent-surface rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                         </div>
                         <span id="background-status-indicator"
-                            class="w-3 h-3 bg-blue-400 rounded-full pulse-glow"></span>
+                            class="w-3 h-3 bg-primary rounded-full pulse-glow"></span>
                     </div>
-                    <h3 class="font-semibold text-white mb-1">Background Service</h3>
-                    <p class="text-sm text-blue-400" id="background-service-status">Running</p>
-                    <p class="text-xs text-gray-400 mt-2" id="service-uptime">Uptime: <span
+                    <h3 class="font-semibold text-text-primary mb-1">Background Service</h3>
+                    <p class="text-sm text-primary" id="background-service-status">Running</p>
+                    <p class="text-xs text-text-tertiary mt-2" id="service-uptime">Uptime: <span
                             id="uptime-display">0:00:00</span></p>
                 </div>
             </div>
@@ -359,61 +408,61 @@
             <!-- Scan Section & System Info -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <!-- Advanced Scan Panel -->
-                <div class="glass rounded-2xl p-8">
+                <div class="fluent-card rounded-2xl p-8">
                     <div class="text-center">
                         <div
-                            class="w-20 h-20 mx-auto mb-6 neo rounded-full flex items-center justify-center scan-animation">
-                            <svg class="w-10 h-10 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            class="w-20 h-20 mx-auto mb-6 fluent-elevated rounded-full flex items-center justify-center scan-animation">
+                            <svg class="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
 
-                        <h2 class="text-xl font-bold text-white mb-2">Deep System Scan</h2>
-                        <p class="text-gray-400 mb-6">Advanced threat detection & removal</p>
+                        <h2 class="text-xl font-bold text-text-primary mb-2">Deep System Scan</h2>
+                        <p class="text-text-secondary mb-6">Advanced threat detection & removal</p>
 
                         <!-- Scan Controls -->
                         <div class="space-y-4">
                             <button id="full-scan-btn"
-                                class="w-full neo px-6 py-3 rounded-xl font-medium text-secondary hover:shadow-neo-outset transition-all duration-300">
+                                class="w-full fluent-elevated px-6 py-3 rounded-xl font-medium text-primary hover:shadow-fluent-card transition-all duration-300">
                                 Full System Scan
                             </button>
                             <div class="grid grid-cols-2 gap-3">
                                 <button
-                                    class="glass px-4 py-2 rounded-lg text-sm hover:bg-white/20 transition-all">Custom
+                                    class="fluent-surface px-4 py-2 rounded-lg text-sm hover:shadow-fluent transition-all text-text-primary">Custom
                                     Scan</button>
                                 <button
-                                    class="glass px-4 py-2 rounded-lg text-sm hover:bg-white/20 transition-all">Schedule</button>
+                                    class="fluent-surface px-4 py-2 rounded-lg text-sm hover:shadow-fluent transition-all text-text-primary">Schedule</button>
                             </div>
                         </div>
 
                         <!-- Scan Progress (Hidden by default) -->
                         <div id="scan-progress" class="hidden mt-6">
-                            <div class="neo-inset rounded-xl p-4">
+                            <div class="fluent-surface rounded-xl p-4">
                                 <div class="flex items-center justify-between mb-3">
-                                    <span class="text-sm text-gray-300">Scanning...</span>
-                                    <span class="text-secondary font-medium" id="scan-percentage">0%</span>
+                                    <span class="text-sm text-text-secondary">Scanning...</span>
+                                    <span class="text-primary font-medium" id="scan-percentage">0%</span>
                                 </div>
-                                <div class="w-full bg-gray-700 rounded-full h-2 mb-3">
+                                <div class="w-full bg-border-light rounded-full h-2 mb-3">
                                     <div id="scan-bar"
-                                        class="bg-secondary h-2 rounded-full transition-all duration-1000 pulse-glow"
+                                        class="bg-primary h-2 rounded-full transition-all duration-1000 pulse-glow"
                                         style="width: 0%"></div>
                                 </div>
-                                <p class="text-xs text-gray-400" id="scan-status">Initializing deep system scan...</p>
+                                <p class="text-xs text-text-tertiary" id="scan-status">Initializing deep system scan...</p>
                             </div>
                         </div>
 
                         <!-- Scan Complete (Hidden by default) -->
                         <div id="scan-complete" class="hidden mt-6">
-                            <div class="glass border border-secondary/30 rounded-xl p-4">
+                            <div class="fluent-card border border-primary/20 rounded-xl p-4">
                                 <div class="flex items-center justify-center space-x-2 mb-3">
-                                    <svg class="w-6 h-6 text-secondary pulse-glow" fill="currentColor"
+                                    <svg class="w-6 h-6 text-primary pulse-glow" fill="currentColor"
                                         viewBox="0 0 24 24">
                                         <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
                                     </svg>
-                                    <span class="text-secondary font-medium">Scan Complete - System Secure</span>
+                                    <span class="text-primary font-medium">Scan Complete - System Secure</span>
                                 </div>
-                                <p class="text-gray-300 text-sm text-center">No threats detected. Your system is
+                                <p class="text-text-secondary text-sm text-center">No threats detected. Your system is
                                     protected.</p>
                             </div>
                         </div>
@@ -421,125 +470,125 @@
                 </div>
 
                 <!-- System Information -->
-                <div class="glass rounded-2xl p-8">
-                    <h3 class="text-xl font-bold text-white mb-6">System Information</h3>
+                <div class="fluent-card rounded-2xl p-8">
+                    <h3 class="text-xl font-bold text-text-primary mb-6">System Information</h3>
                     <div class="space-y-4">
-                        <div class="flex justify-between items-center py-2 border-b border-white/10">
-                            <span class="text-gray-400">Device Name:</span>
-                            <span class="text-white font-medium" id="device-name">Loading...</span>
+                        <div class="flex justify-between items-center py-2 border-b border-border-light">
+                            <span class="text-text-secondary">Device Name:</span>
+                            <span class="text-text-primary font-medium" id="device-name">Loading...</span>
                         </div>
-                        <div class="flex justify-between items-center py-2 border-b border-white/10">
-                            <span class="text-gray-400">Platform:</span>
-                            <span class="text-white font-medium" id="device-platform">Loading...</span>
+                        <div class="flex justify-between items-center py-2 border-b border-border-light">
+                            <span class="text-text-secondary">Platform:</span>
+                            <span class="text-text-primary font-medium" id="device-platform">Loading...</span>
                         </div>
-                        <div class="flex justify-between items-center py-2 border-b border-white/10">
-                            <span class="text-gray-400">Connection:</span>
-                            <span class="text-secondary font-medium" id="device-connection-status">Online</span>
+                        <div class="flex justify-between items-center py-2 border-b border-border-light">
+                            <span class="text-text-secondary">Connection:</span>
+                            <span class="text-primary font-medium" id="device-connection-status">Online</span>
                         </div>
-                        <div class="flex justify-between items-center py-2 border-b border-white/10">
-                            <span class="text-gray-400">Last Scan:</span>
-                            <span class="text-white font-medium" id="last-scan">Never</span>
+                        <div class="flex justify-between items-center py-2 border-b border-border-light">
+                            <span class="text-text-secondary">Last Scan:</span>
+                            <span class="text-text-primary font-medium" id="last-scan">Never</span>
                         </div>
-                        <div class="flex justify-between items-center py-2 border-b border-white/10">
-                            <span class="text-gray-400">Threats Found:</span>
-                            <span class="text-white font-medium" id="threats-found">0</span>
+                        <div class="flex justify-between items-center py-2 border-b border-border-light">
+                            <span class="text-text-secondary">Threats Found:</span>
+                            <span class="text-text-primary font-medium" id="threats-found">0</span>
                         </div>
                         <div class="flex justify-between items-center py-2">
-                            <span class="text-gray-400">Version:</span>
-                            <span class="text-white font-medium">2024.10.1</span>
+                            <span class="text-text-secondary">Version:</span>
+                            <span class="text-text-primary font-medium">2024.10.1</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Additional Tools -->
-            <div class="glass rounded-2xl p-6">
-                <h3 class="text-lg font-bold text-white mb-4">Security Tools</h3>
+            <div class="fluent-card rounded-2xl p-6">
+                <h3 class="text-lg font-bold text-text-primary mb-4">Security Tools</h3>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <button
-                        class="neo-inset p-4 rounded-xl hover:shadow-neo-outset transition-all duration-300 text-center">
+                        class="fluent-surface p-4 rounded-xl hover:shadow-fluent-elevated transition-all duration-300 text-center">
                         <svg class="w-8 h-8 mx-auto mb-2 text-warning" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                         </svg>
-                        <span class="text-xs text-gray-300">Quarantine</span>
+                        <span class="text-xs text-text-secondary">Quarantine</span>
                     </button>
                     <button
-                        class="neo-inset p-4 rounded-xl hover:shadow-neo-outset transition-all duration-300 text-center">
+                        class="fluent-surface p-4 rounded-xl hover:shadow-fluent-elevated transition-all duration-300 text-center">
                         <svg class="w-8 h-8 mx-auto mb-2 text-accent" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                         </svg>
-                        <span class="text-xs text-gray-300">Startup</span>
+                        <span class="text-xs text-text-secondary">Startup</span>
                     </button>
                     <button
-                        class="neo-inset p-4 rounded-xl hover:shadow-neo-outset transition-all duration-300 text-center">
+                        class="fluent-surface p-4 rounded-xl hover:shadow-fluent-elevated transition-all duration-300 text-center">
                         <svg class="w-8 h-8 mx-auto mb-2 text-secondary" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        <span class="text-xs text-gray-300">Cleaner</span>
+                        <span class="text-xs text-text-secondary">Cleaner</span>
                     </button>
                     <button
-                        class="neo-inset p-4 rounded-xl hover:shadow-neo-outset transition-all duration-300 text-center">
-                        <svg class="w-8 h-8 mx-auto mb-2 text-purple-400" fill="none" stroke="currentColor"
+                        class="fluent-surface p-4 rounded-xl hover:shadow-fluent-elevated transition-all duration-300 text-center">
+                        <svg class="w-8 h-8 mx-auto mb-2 text-accent" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        <span class="text-xs text-gray-300">Reports</span>
+                        <span class="text-xs text-text-secondary">Reports</span>
                     </button>
                     <button
-                        class="neo-inset p-4 rounded-xl hover:shadow-neo-outset transition-all duration-300 text-center">
-                        <svg class="w-8 h-8 mx-auto mb-2 text-pink-400" fill="none" stroke="currentColor"
+                        class="fluent-surface p-4 rounded-xl hover:shadow-fluent-elevated transition-all duration-300 text-center">
+                        <svg class="w-8 h-8 mx-auto mb-2 text-primary" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                         </svg>
-                        <span class="text-xs text-gray-300">Browser</span>
+                        <span class="text-xs text-text-secondary">Browser</span>
                     </button>
                 </div>
             </div>
         </div>
 
         <!-- Login Modal (Hidden by default) -->
-        <div id="login-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden">
+        <div id="login-modal" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 hidden">
             <div class="flex items-center justify-center min-h-screen p-4">
-                <div class="glass rounded-2xl p-8 max-w-md w-full border border-glass-border">
+                <div class="fluent-elevated rounded-2xl p-8 max-w-md w-full border border-border-subtle">
                     <div class="text-center mb-8">
                         <div
-                            class="w-16 h-16 mx-auto mb-4 neo rounded-full flex items-center justify-center pulse-glow">
-                            <svg class="w-8 h-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            class="w-16 h-16 mx-auto mb-4 fluent-surface rounded-full flex items-center justify-center pulse-glow">
+                            <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                             </svg>
                         </div>
 
-                        <h2 class="text-2xl font-bold text-white mb-2">Secure Remote Access</h2>
-                        <p class="text-gray-400 mb-6">Enable advanced protection monitoring</p>
+                        <h2 class="text-2xl font-bold text-text-primary mb-2">Secure Remote Access</h2>
+                        <p class="text-text-secondary mb-6">Enable advanced protection monitoring</p>
 
                         <!-- Email Form -->
-                        <div class="neo-inset rounded-xl p-6 mb-6">
+                        <div class="fluent-surface rounded-xl p-6 mb-6">
                             <div>
-                                <label for="user-email" class="block text-sm font-medium text-gray-300 mb-2">Email
+                                <label for="user-email" class="block text-sm font-medium text-text-primary mb-2">Email
                                     Address:</label>
                                 <input type="email" id="user-email"
-                                    class="w-full px-4 py-3 neo-inset border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-secondary focus:border-secondary bg-transparent"
+                                    class="w-full px-4 py-3 fluent-card border border-border-subtle rounded-lg text-text-primary placeholder-text-tertiary focus:ring-2 focus:ring-primary focus:border-primary bg-surface"
                                     placeholder="your.email@example.com" value="">
-                                <p class="text-xs text-gray-500 mt-2">Secure authentication for remote monitoring</p>
+                                <p class="text-xs text-text-tertiary mt-2">Secure authentication for remote monitoring</p>
                             </div>
                         </div>
 
                         <div class="flex space-x-3">
                             <button id="setup-btn"
-                                class="flex-1 neo text-secondary py-3 px-6 rounded-lg hover:shadow-neo-outset transition-all duration-300 font-medium">
+                                class="flex-1 fluent-elevated text-primary py-3 px-6 rounded-lg hover:shadow-fluent-card transition-all duration-300 font-medium">
                                 Enable Protection
                             </button>
                             <button id="close-modal-btn"
-                                class="glass px-4 py-3 rounded-lg hover:bg-white/20 transition-all duration-300">
+                                class="fluent-surface px-4 py-3 rounded-lg hover:shadow-fluent transition-all duration-300 text-text-primary">
                                 Cancel
                             </button>
                         </div>
