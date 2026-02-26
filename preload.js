@@ -37,9 +37,13 @@ console.log("🔧 Runtime config loaded:", runtimeConfig);
 contextBridge.exposeInMainWorld("electronAPI", {
   // Configuration
   config: {
-    BACKEND_URL: runtimeConfig.BACKEND_URL,
+    BACKEND_URL:    runtimeConfig.BACKEND_URL,
     BACKEND_WS_URL: runtimeConfig.BACKEND_WS_URL,
-    WS_SERVER_URL: runtimeConfig.WS_SERVER_URL,
+    WS_SERVER_URL:  runtimeConfig.WS_SERVER_URL,
+    // TURN server (for cross-NAT WebRTC) — set in env.production or process.env
+    TURN_URL:      runtimeConfig.TURN_URL      || "",
+    TURN_USERNAME: runtimeConfig.TURN_USERNAME || "",
+    TURN_PASSWORD: runtimeConfig.TURN_PASSWORD || "",
   },
   
   // Session management

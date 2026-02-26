@@ -50,15 +50,24 @@ let selectedUrls;
 
 if (isDevelopment) {
   environment = 'development';
-  selectedUrls = DEVELOPMENT_URLS;
+  selectedUrls = {
+    ...DEVELOPMENT_URLS,
+    TURN_URL:      process.env.TURN_URL      || "",
+    TURN_USERNAME: process.env.TURN_USERNAME || "",
+    TURN_PASSWORD: process.env.TURN_PASSWORD || "",
+  };
   console.log('🔧 Running in DEVELOPMENT mode (source files detected)');
 } else {
   environment = 'production';
   // Use env vars if available, otherwise use hardcoded production URLs
   selectedUrls = {
-    BACKEND_URL: process.env.BACKEND_URL || PRODUCTION_URLS.BACKEND_URL,
+    BACKEND_URL:    process.env.BACKEND_URL    || PRODUCTION_URLS.BACKEND_URL,
     BACKEND_WS_URL: process.env.BACKEND_WS_URL || PRODUCTION_URLS.BACKEND_WS_URL,
-    WS_SERVER_URL: process.env.WS_SERVER_URL || PRODUCTION_URLS.WS_SERVER_URL,
+    WS_SERVER_URL:  process.env.WS_SERVER_URL  || PRODUCTION_URLS.WS_SERVER_URL,
+    // TURN server for cross-NAT P2P — set these in env.production
+    TURN_URL:      process.env.TURN_URL      || "",
+    TURN_USERNAME: process.env.TURN_USERNAME || "",
+    TURN_PASSWORD: process.env.TURN_PASSWORD || "",
   };
   console.log('🚀 Running in PRODUCTION mode');
 }

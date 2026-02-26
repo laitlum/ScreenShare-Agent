@@ -6,6 +6,7 @@ let isAgentRunning = false;
 let remoteAnswerApplied = false;
 let applyingRemoteAnswer = false;
 let pendingIceCandidates = [];
+let startingScreenShare = false; // guard against concurrent startScreenShare calls
 let deviceInfo = null;
 let backendWS = null;
 let userEmail = null;
@@ -52,6 +53,28 @@ try {
 
 console.log('🔧 Backend URL:', BACKEND_URL);
 console.log('🔧 WebSocket URL:', WS_SERVER_URL);
+
+// Build ICE server list — reads TURN credentials from electronAPI config if provided
+function buildIceServers() {
+  const servers = [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.cloudflare.com:3478" },
+  ];
+  try {
+    const cfg = window.electronAPI && window.electronAPI.config;
+    const turnUrl  = cfg && cfg.TURN_URL;
+    const turnUser = cfg && cfg.TURN_USERNAME;
+    const turnPass = cfg && cfg.TURN_PASSWORD;
+    if (turnUrl) {
+      servers.push({ urls: turnUrl, username: turnUser || "", credential: turnPass || "" });
+      console.log("🌐 TURN server configured:", turnUrl);
+    } else {
+      console.warn("⚠️ No TURN server configured — P2P may fail across NATs.");
+    }
+  } catch (_) {}
+  return servers;
+}
 
 // Initialize the application
 function init() {
@@ -1740,11 +1763,17 @@ function connectToSignalingServer() {
 
 // Start screen sharing with WebRTC
 async function startScreenShare(sessionId) {
+  // Guard: prevent concurrent calls (e.g. two rapid request-offer messages)
+  if (startingScreenShare) {
+    console.warn("⏭️ startScreenShare already in progress — ignoring duplicate call");
+    return;
+  }
+  startingScreenShare = true;
   try {
     console.log("🚀 DEBUG: startScreenShare called with sessionId:", sessionId);
     console.log("🚀 DEBUG: peerConnection exists:", !!peerConnection);
     console.log("🚀 DEBUG: localStream exists:", !!localStream);
-    
+
     // Clean up existing connections before creating new ones
     if (peerConnection) {
       console.log("🧹 Closing existing peer connection...");
@@ -1767,12 +1796,9 @@ async function startScreenShare(sessionId) {
     pendingIceCandidates = [];
     console.log("🖥️ Starting screen capture...");
 
-    // Create peer connection
+    // Create peer connection with STUN + optional TURN for cross-NAT traversal
     peerConnection = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-      ],
+      iceServers: buildIceServers(),
     });
 
     // Get screen stream using Electron's desktopCapturer API
@@ -2350,6 +2376,42 @@ async function startScreenShare(sessionId) {
     console.log("⏳ Waiting for tracks to be processed...");
     await new Promise((resolve) => setTimeout(resolve, 100));
 
+    // Set codec preferences before offer: prefer H264 (hardware accel) then VP8 then VP9
+    try {
+      const transceivers = peerConnection.getTransceivers();
+      for (const transceiver of transceivers) {
+        const kind = transceiver.sender.track && transceiver.sender.track.kind;
+        if (kind === "video" && RTCRtpSender.getCapabilities) {
+          const caps = RTCRtpSender.getCapabilities("video");
+          if (caps && caps.codecs && caps.codecs.length > 0) {
+            const preferred = ["video/H264", "video/VP8", "video/VP9"];
+            const sorted = [...caps.codecs].sort((a, b) => {
+              const ai = preferred.indexOf(a.mimeType);
+              const bi = preferred.indexOf(b.mimeType);
+              return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+            });
+            transceiver.setCodecPreferences(sorted);
+            console.log("🎬 Video codec preferences set:", sorted.slice(0, 3).map(c => c.mimeType).join(", ") + "...");
+          }
+        }
+        if (kind === "audio" && RTCRtpSender.getCapabilities) {
+          const caps = RTCRtpSender.getCapabilities("audio");
+          if (caps && caps.codecs && caps.codecs.length > 0) {
+            // Prefer Opus (best quality/bandwidth) for audio
+            const sorted = [...caps.codecs].sort((a, b) => {
+              const aIsOpus = a.mimeType === "audio/opus" ? 0 : 1;
+              const bIsOpus = b.mimeType === "audio/opus" ? 0 : 1;
+              return aIsOpus - bIsOpus;
+            });
+            transceiver.setCodecPreferences(sorted);
+            console.log("🔊 Audio codec preferences set: Opus first");
+          }
+        }
+      }
+    } catch (codecErr) {
+      console.warn("⚠️ Could not set codec preferences:", codecErr.message);
+    }
+
     // Create and send offer
     console.log("📤 Creating WebRTC offer...");
     const offer = await peerConnection.createOffer();
@@ -2428,6 +2490,8 @@ async function startScreenShare(sessionId) {
   } catch (error) {
     console.error("❌ Failed to start screen sharing:", error);
     updateStatus("Failed to start screen sharing: " + error.message);
+  } finally {
+    startingScreenShare = false; // always release guard
   }
 }
 
