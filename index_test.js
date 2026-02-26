@@ -1,0 +1,1 @@
+console.log("process.type:", process.type); console.log("versions.electron:", process.versions.electron); const e = require("electron"); console.log("electron type:", typeof e, typeof e === "string" ? e.substring(0, 50) : "object"); process.exit(0);

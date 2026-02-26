@@ -850,6 +850,25 @@ async function handleInput(data, event = null) {
       await clickMouse(data.button || "left");
     }
 
+    // Handle double-click events
+    if (data.action === "dblclick") {
+      if (data.x !== undefined && data.y !== undefined) {
+        await moveMouse(
+          data.x,
+          data.y,
+          width,
+          height,
+          data.remoteWidth || width,
+          data.remoteHeight || height
+        );
+      }
+      const btn = data.button === 2 ? "right" : "left";
+      await clickMouse(btn);
+      await new Promise((r) => setTimeout(r, 50));
+      await clickMouse(btn);
+      console.log(`🖱️ Double-click executed at (${data.x}, ${data.y})`);
+    }
+
     // Skip mousedown to prevent multiple clicks
     if (data.action === "mousedown") {
       return; // Skip without logging
