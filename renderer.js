@@ -277,18 +277,20 @@ async function captureSystemAudioInternal(primarySource) {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: false, // We already have video
             audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
+                // Disable all processing — this is system/desktop audio, not a microphone.
+                // Echo cancellation and noise suppression add latency and degrade quality.
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
                 suppressLocalAudioPlayback: false,
                 sampleRate: 48000,
                 channelCount: 2,
-                latency: 0.01,
-                googEchoCancellation: true,
-                googAutoGainControl: true,
-                googNoiseSuppression: true,
-                googHighpassFilter: true,
-                googTypingNoiseDetection: true,
+                latency: 0,
+                googEchoCancellation: false,
+                googAutoGainControl: false,
+                googNoiseSuppression: false,
+                googHighpassFilter: false,
+                googTypingNoiseDetection: false,
                 googAudioMirroring: false
             }
         });

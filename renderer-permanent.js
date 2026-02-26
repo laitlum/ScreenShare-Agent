@@ -294,7 +294,7 @@ function setupEventListeners() {
   if (winMinimizeBtn && window.electronAPI) {
     winMinimizeBtn.addEventListener("click", async function () {
       try {
-        await window.electronAPI.minimizeWindow();
+        await window.electronAPI.windowMinimize();
       } catch (error) {
         console.error("Error minimizing window:", error);
       }
@@ -304,7 +304,7 @@ function setupEventListeners() {
   if (winMaximizeBtn && window.electronAPI) {
     winMaximizeBtn.addEventListener("click", async function () {
       try {
-        await window.electronAPI.maximizeWindow();
+        await window.electronAPI.windowMaximize();
       } catch (error) {
         console.error("Error maximizing window:", error);
       }
@@ -314,7 +314,7 @@ function setupEventListeners() {
   if (winCloseBtn && window.electronAPI) {
     winCloseBtn.addEventListener("click", async function () {
       try {
-        await window.electronAPI.closeWindow();
+        await window.electronAPI.windowClose();
       } catch (error) {
         console.error("Error closing window:", error);
       }

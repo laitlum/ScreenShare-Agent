@@ -225,8 +225,9 @@ async function pressKey(key, modifiers = [], code = null) {
 
     // Check if we have this key in our keyMap
     if (keyMap[keyToUse]) {
-      // Use keyboard.pressKey for mapped keys
+      // Use keyboard.pressKey + releaseKey for a complete key tap
       await keyboard.pressKey(keyMap[keyToUse]);
+      await keyboard.releaseKey(keyMap[keyToUse]);
     } else if (keyToUse && keyToUse.length === 1) {
       // Single character - just type it
       await keyboard.type(keyToUse);

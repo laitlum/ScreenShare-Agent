@@ -2,11 +2,11 @@
 const path = require('path');
 const fs = require('fs');
 
-// Production URLs - Using localhost for local testing
+// Production URLs - deployed server
 const PRODUCTION_URLS = {
-  BACKEND_URL: 'http://localhost:8000',
-  BACKEND_WS_URL: 'ws://localhost:8000/ws',
-  WS_SERVER_URL: 'ws://localhost:8081/ws',
+  BACKEND_URL: 'https://laitlum.lipiq.in',
+  BACKEND_WS_URL: 'wss://laitlum.lipiq.in/ws',
+  WS_SERVER_URL: 'wss://laitlum.lipiq.in/ws',
 };
 
 const DEVELOPMENT_URLS = {
@@ -15,15 +15,14 @@ const DEVELOPMENT_URLS = {
   WS_SERVER_URL: 'ws://localhost:8081/ws',
 };
 
-// Detect if running from source (development)
-// Packaged apps will have __dirname inside app.asar or in resources/app.asar
+// Detect if running from source (development) vs packaged
+// Packaged apps have __dirname inside app.asar or in .app/Contents/Resources
 const isDevelopment = process.env.NODE_ENV !== 'production' &&
                      !__dirname.includes('app.asar') &&
-                     !__dirname.includes('.app/Contents/Resources') &&
-                     !process.execPath.includes('.exe');
+                     !__dirname.includes('.app/Contents/Resources');
 
-// Load environment variables from env.production file if running source in production mode
-if (process.env.NODE_ENV === 'production' && !isDevelopment) {
+// Load environment variables from env.production file when packaged or in production mode
+if (!isDevelopment) {
   const envPath = path.join(__dirname, 'env.production');
   if (fs.existsSync(envPath)) {
     try {

