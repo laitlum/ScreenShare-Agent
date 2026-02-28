@@ -205,35 +205,51 @@ async function typeChar(char) {
 }
 
 // Handle special key presses
-async function pressKey(key, modifiers = [], code = null) {
+async function pressKey(key, modifiers = [], code = null, ctrlKey = false, altKey = false, shiftKey = false, metaKey = false) {
   try {
     // Try to use code first (more reliable for special keys like KeyR, KeyE, etc.)
     let keyToUse = code || key;
-    
+
     // Convert KeyR, KeyE, etc. to just the letter
     if (keyToUse && keyToUse.startsWith('Key') && keyToUse.length === 4) {
       keyToUse = keyToUse.charAt(3).toLowerCase(); // KeyR -> r
     }
-    
+
     // Check if it's a modifier key being held
-    const isModifier = ['Meta', 'MetaLeft', 'MetaRight', 'Control', 'ControlLeft', 'ControlRight', 
+    const isModifier = ['Meta', 'MetaLeft', 'MetaRight', 'Control', 'ControlLeft', 'ControlRight',
                        'Shift', 'ShiftLeft', 'ShiftRight', 'Alt', 'AltLeft', 'AltRight'].includes(key);
-    
+
     if (isModifier) {
-      return { success: true }; // Skip modifier keys
+      return { success: true }; // Skip standalone modifier key events
     }
 
-    // Check if we have this key in our keyMap
-    if (keyMap[keyToUse]) {
-      // Use keyboard.pressKey + releaseKey for a complete key tap
-      await keyboard.pressKey(keyMap[keyToUse]);
-      await keyboard.releaseKey(keyMap[keyToUse]);
-    } else if (keyToUse && keyToUse.length === 1) {
-      // Single character - just type it
-      await keyboard.type(keyToUse);
-    } else {
-      // Fallback: try to type the original key
-      await keyboard.type(key);
+    // Build list of modifier keys to hold during this keystroke
+    const heldModifiers = [];
+    if (ctrlKey)  heldModifiers.push(Key.LeftControl);
+    if (altKey)   heldModifiers.push(Key.LeftAlt);
+    if (shiftKey) heldModifiers.push(Key.LeftShift);
+    if (metaKey)  heldModifiers.push(Key.LeftMeta);
+
+    // Press all modifier keys down first
+    for (const mod of heldModifiers) {
+      await keyboard.pressKey(mod);
+    }
+
+    try {
+      // Press the main key
+      if (keyMap[keyToUse]) {
+        await keyboard.pressKey(keyMap[keyToUse]);
+        await keyboard.releaseKey(keyMap[keyToUse]);
+      } else if (keyToUse && keyToUse.length === 1) {
+        await keyboard.type(keyToUse);
+      } else {
+        await keyboard.type(key);
+      }
+    } finally {
+      // Always release modifier keys, even if main key threw
+      for (const mod of [...heldModifiers].reverse()) {
+        await keyboard.releaseKey(mod);
+      }
     }
 
     return { success: true };
