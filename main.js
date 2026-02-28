@@ -263,8 +263,7 @@ function createSystemTray() {
 
 // Windows: request admin elevation so we can inject input into elevated windows
 // (Task Manager, Device Manager, etc. run at HIGH integrity — we need to match)
-// Skip in development (app.isPackaged === false) to avoid a UAC prompt on every dev launch
-if (process.platform === "win32" && app.isPackaged) {
+if (process.platform === "win32") {
   const { execSync, spawn } = require("child_process");
   const isAdmin = (() => {
     try { execSync("net session", { stdio: "ignore" }); return true; }
