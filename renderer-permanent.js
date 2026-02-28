@@ -1193,27 +1193,10 @@ async function handleBackendMessage(data) {
       }
       break;
     case "viewer-input":
-      console.log("🖱️ Received viewer input from backend");
-      // Forward to signaling WebSocket handler
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "viewer-input",
-            data: {
-              action: data.input?.action,
-              x: data.input?.x,
-              y: data.input?.y,
-              button: data.input?.button,
-              key: data.input?.key,
-              char: data.input?.char,
-              modifiers: data.input?.modifiers,
-              remoteWidth: data.input?.remoteWidth,
-              remoteHeight: data.input?.remoteHeight,
-              sessionId: data.sessionId,
-            },
-          })
-        );
-      }
+      // Hub routes viewer input as 'input-event' directly to the signaling ws
+      // via NotifyDevice. Processing it here would create a duplicate path.
+      // Signaling ws (case "input-event" / "viewer-input") handles this already.
+      console.log("🖱️ viewer-input on backendWS — handled by signaling ws, skipping");
       break;
     case "session-error":
       console.error(
@@ -1293,10 +1276,7 @@ async function registerDevice() {
       );
       showAgentRunning();
       updateUI();
-
-      // Initialize WebSocket connection for signaling
-      console.log("🔌 Initializing WebSocket connection for signaling...");
-      initializeWebSocket();
+      // Note: showAgentRunning() already calls initializeWebSocket() via setTimeout — no duplicate call here.
     } else {
       const error = await response.text();
       throw new Error(`Registration failed: ${error}`);
@@ -1601,6 +1581,12 @@ function connectToSignalingServer() {
     console.log(
       "🔄 Device not registered yet, skipping signaling WebSocket connection"
     );
+    return;
+  }
+
+  // Guard: don't open a second connection if one is already alive
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    console.log("⏭️ Signaling WebSocket already connected/connecting — skipping duplicate call");
     return;
   }
 
@@ -2608,7 +2594,37 @@ async function handleICECandidate(candidate) {
 }
 
 // Handle remote control input using nut.js
+// Deduplication for handleRemoteInput: drop exact-same payloads within 20ms
+// (protects against any double-delivery path regardless of source)
+const _inputDedup = new Map(); // key → lastSeenAt
+function _isDuplicateInput(data) {
+  try {
+    const key = JSON.stringify(data);
+    const now = Date.now();
+    const last = _inputDedup.get(key);
+    if (last !== undefined && (now - last) < 20) {
+      return true;
+    }
+    _inputDedup.set(key, now);
+    // Prune old entries to avoid unbounded growth
+    if (_inputDedup.size > 50) {
+      const cutoff = now - 1000;
+      for (const [k, ts] of _inputDedup) {
+        if (ts < cutoff) _inputDedup.delete(k);
+      }
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function handleRemoteInput(data) {
+  // Drop exact-duplicate payloads arriving within 20ms (safety net for any double-delivery)
+  if (_isDuplicateInput(data)) {
+    console.warn("⚠️ Duplicate input dropped (same payload within 20ms):", data?.action || data?.type);
+    return;
+  }
   try {
     console.log("🔄 handleRemoteInput called with:", JSON.stringify(data, null, 2));
     
