@@ -48,7 +48,7 @@
 **Version:** 1.0.0
 **Platform:** Windows (NSIS installer)
 **File Size:** 69 MB
-**File:** `dist/Laitlum Antivirus Setup 1.0.0.exe`
+**File:** `dist/Defender Agent Setup 1.0.0.exe`
 
 ## Testing Instructions
 

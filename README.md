@@ -1,4 +1,4 @@
-# 🛡️ Laitlum Antivirus Agent - Remote Screen Sharing & Control
+# 🛡️ Defender Agent - Remote Screen Sharing & Control
 
 A professional remote access agent built with Electron, WebRTC, and WebSocket signaling, featuring zero-lag remote control capabilities for enterprise use.
 
@@ -202,13 +202,13 @@ Check console logs for detailed debugging information.
 ```bash
 npm run build:win
 ```
-Creates: `dist/Laitlum Antivirus Setup 1.0.0.exe`
+Creates: `dist/Defender Agent Setup 1.0.0.exe`
 
 ### macOS DMG
 ```bash
 npm run build:mac
 ```
-Creates: `dist/Laitlum Antivirus-1.0.0.dmg`
+Creates: `dist/Defender Agent-1.0.0.dmg`
 
 ### Cross-Platform
 ```bash

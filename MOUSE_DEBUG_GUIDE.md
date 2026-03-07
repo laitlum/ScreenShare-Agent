@@ -69,7 +69,7 @@ Added mouse position verification after each move:
 ## 🧪 Testing Instructions
 
 ### 1. Install the New EXE
-- Download the latest `Laitlum Antivirus Setup 1.0.0.exe`
+- Download the latest `Defender Agent Setup 1.0.0.exe`
 - Install on your Windows machine
 
 ### 2. Test Mouse Movement

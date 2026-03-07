@@ -1,4 +1,4 @@
-console.log("🛡️ LAITLUM ANTIVIRUS AGENT LOADED");
+console.log("🛡️ DEFENDER AGENT LOADED");
 
 let peerConnection = null;
 let localStream = null;
@@ -102,7 +102,7 @@ function buildIceServers() {
 
 // Initialize the application
 function init() {
-  console.log("🚀 Initializing Laitlum Antivirus Agent...");
+  console.log("🚀 Initializing Defender Agent...");
   loadDeviceInfo();
   setupEventListeners();
   
@@ -121,16 +121,16 @@ function init() {
 
 // Check for persistent session
 async function checkPersistentSession() {
-  const savedDeviceId = localStorage.getItem("laitlum_device_id");
-  const savedEmail = localStorage.getItem("laitlum_user_email");
-  const savedName = localStorage.getItem("laitlum_device_name");
-  const savedPlatform = localStorage.getItem("laitlum_device_platform");
+  const savedDeviceId = localStorage.getItem("defender_device_id");
+  const savedEmail = localStorage.getItem("defender_user_email");
+  const savedName = localStorage.getItem("defender_device_name");
+  const savedPlatform = localStorage.getItem("defender_device_platform");
 
   if (!savedDeviceId && savedEmail) {
     // Backward-compat: fall back to generated device_id
     const fallback = localStorage.getItem("device_id");
     if (fallback) {
-      localStorage.setItem("laitlum_device_id", fallback);
+      localStorage.setItem("defender_device_id", fallback);
     }
   }
 
@@ -565,7 +565,7 @@ async function handleDeviceSetup() {
     }
 
     // Check if device is already registered with this email
-    const savedDeviceId = localStorage.getItem("laitlum_device_id");
+    const savedDeviceId = localStorage.getItem("defender_device_id");
     if (savedDeviceId && !emailChanged) {
       console.log(
         "🔍 Checking if device is already registered with this email..."
@@ -589,17 +589,17 @@ async function handleDeviceSetup() {
           userEmail = newEmail;
           deviceInfo = {
             name:
-              localStorage.getItem("laitlum_device_name") || "Unknown Device",
+              localStorage.getItem("defender_device_name") || "Unknown Device",
             deviceId: savedDeviceId,
             platform:
-              localStorage.getItem("laitlum_device_platform") || "unknown",
+              localStorage.getItem("defender_device_platform") || "unknown",
             ipAddress: "Unknown",
             macAddress: "Unknown",
             registered: true,
           };
 
           // Save the email to localStorage
-          localStorage.setItem("laitlum_user_email", newEmail);
+          localStorage.setItem("defender_user_email", newEmail);
 
           isSignedIn = true;
           hideLoginModal();
@@ -741,10 +741,10 @@ async function handleLogout() {
   }
 
   // Clear persistent session
-  localStorage.removeItem("laitlum_user_email");
-  localStorage.removeItem("laitlum_device_id");
-  localStorage.removeItem("laitlum_device_name");
-  localStorage.removeItem("laitlum_device_platform");
+  localStorage.removeItem("defender_user_email");
+  localStorage.removeItem("defender_device_id");
+  localStorage.removeItem("defender_device_name");
+  localStorage.removeItem("defender_device_platform");
 
   // Stop services
   stopHeartbeat();
@@ -800,10 +800,10 @@ async function handleLogout() {
 // Save persistent session
 function savePersistentSession() {
   if (userEmail && deviceInfo) {
-    localStorage.setItem("laitlum_user_email", userEmail);
-    localStorage.setItem("laitlum_device_id", deviceInfo.deviceId);
-    localStorage.setItem("laitlum_device_name", deviceInfo.name);
-    localStorage.setItem("laitlum_device_platform", deviceInfo.platform);
+    localStorage.setItem("defender_user_email", userEmail);
+    localStorage.setItem("defender_device_id", deviceInfo.deviceId);
+    localStorage.setItem("defender_device_name", deviceInfo.name);
+    localStorage.setItem("defender_device_platform", deviceInfo.platform);
     console.log("💾 Persistent session saved for:", userEmail);
   }
 }
@@ -1289,10 +1289,10 @@ async function registerDevice() {
       deviceInfo.id = result.device.id;
 
       // Save device info to localStorage for persistence
-      localStorage.setItem("laitlum_device_id", deviceInfo.deviceId);
-      localStorage.setItem("laitlum_device_name", deviceInfo.name);
-      localStorage.setItem("laitlum_device_platform", deviceInfo.platform);
-      localStorage.setItem("laitlum_user_email", userEmail);
+      localStorage.setItem("defender_device_id", deviceInfo.deviceId);
+      localStorage.setItem("defender_device_name", deviceInfo.name);
+      localStorage.setItem("defender_device_platform", deviceInfo.platform);
+      localStorage.setItem("defender_user_email", userEmail);
 
       updateStatus("Agent running - Ready for connections");
       console.log(

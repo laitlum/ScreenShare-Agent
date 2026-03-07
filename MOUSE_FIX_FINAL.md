@@ -58,7 +58,7 @@ Result: ✅ Correct position!
 
 ## Testing Instructions
 
-1. **Install the new EXE** (`Laitlum Antivirus Setup 1.0.0.exe` - 64MB, build time: 09:29)
+1. **Install the new EXE** (`Defender Agent Setup 1.0.0.exe` - 64MB, build time: 09:29)
 
 2. **Test mouse at different positions:**
    - Move cursor to **top-left corner** → Should be accurate
@@ -112,7 +112,7 @@ Result: ✅ Correct position!
 - **Platform:** Windows x64
 - **File Size:** 64 MB
 - **Architecture:** Intel 80386 (x64)
-- **File:** `dist/Laitlum Antivirus Setup 1.0.0.exe`
+- **File:** `dist/Defender Agent Setup 1.0.0.exe`
 
 ## Status Summary
 
