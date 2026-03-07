@@ -11,6 +11,7 @@ const {
 } = require("electron");
 const runtimeConfig = require("./config");
 const WebSocket = require("ws");
+const { autoUpdater } = require("electron-updater");
 let moveMouse, clickMouse, typeChar, pressKey, selectAndDeleteText, deleteSelectedText, selectAllText, scrollWheel, mouseDragSelection;
 try {
   const remoteControl = require("./remoteControl");
@@ -263,7 +264,9 @@ function createSystemTray() {
 
 // Windows: request admin elevation so we can inject input into elevated windows
 // (Task Manager, Device Manager, etc. run at HIGH integrity — we need to match)
-if (process.platform === "win32") {
+// In production the manifest requests requireAdministrator (UAC on launch).
+// In dev mode (not packaged), do the PowerShell relaunch fallback.
+if (process.platform === "win32" && !app.isPackaged) {
   const { execSync, spawn } = require("child_process");
   const isAdmin = (() => {
     try { execSync("net session", { stdio: "ignore" }); return true; }
@@ -362,6 +365,40 @@ app.whenReady().then(async () => {
   createSystemTray();
 
   createWindow();
+
+  // ── Auto-update ────────────────────────────────────────────────────
+  if (app.isPackaged) {
+    autoUpdater.logger = console;
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on("update-available", (info) => {
+      console.log("🔄 Update available:", info.version);
+      if (mainWindow) {
+        mainWindow.webContents.send("update-available", info.version);
+      }
+    });
+
+    autoUpdater.on("update-downloaded", (info) => {
+      console.log("✅ Update downloaded:", info.version);
+      if (mainWindow) {
+        mainWindow.webContents.send("update-downloaded", info.version);
+      }
+    });
+
+    autoUpdater.on("error", (err) => {
+      console.error("❌ Auto-update error:", err);
+    });
+
+    // Check after 10 seconds, then every 4 hours
+    setTimeout(() => { autoUpdater.checkForUpdatesAndNotify(); }, 10000);
+    setInterval(() => { autoUpdater.checkForUpdatesAndNotify(); }, 4 * 60 * 60 * 1000);
+  }
+
+  // IPC: renderer asks to install downloaded update
+  ipcMain.on("install-update", () => {
+    autoUpdater.quitAndInstall();
+  });
 });
 
 // Handle app quit properly

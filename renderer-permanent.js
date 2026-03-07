@@ -21,6 +21,30 @@ let isSignedIn = false;
 let lastScanTime = null;
 let agentStartTime = Date.now();
 let dashboardInterval = null;
+const ENABLE_AUDIO = false;
+
+// ── Adaptive Bitrate (ABR) ────────────────────────────────────────────
+const QUALITY_TIERS = {
+  VERY_LOW: { maxBitrate: 400_000, width: 640, height: 360, fps: 10 },
+  LOW:      { maxBitrate: 800_000, width: 960, height: 540, fps: 15 },
+  MEDIUM:   { maxBitrate: 1_500_000, width: 1280, height: 720, fps: 20 },
+  HIGH:     { maxBitrate: 2_500_000, width: 1920, height: 1080, fps: 30 },
+};
+const TIER_ORDER = ['VERY_LOW', 'LOW', 'MEDIUM', 'HIGH'];
+const ABR_CONFIG = {
+  pollIntervalMs: 3000,
+  initialDelayMs: 5000,
+  downgrade: { lossRatio: 0.05, rttMs: 300, headroom: 0.85 },
+  upgrade:   { lossRatio: 0.01, rttMs: 150, headroom: 0.60 },
+  hysteresis: { downgradePolls: 2, upgradePolls: 4 },
+};
+
+let currentTier = 'HIGH';
+let abrIntervalId = null;
+let consecutiveDowngradeVotes = 0;
+let consecutiveUpgradeVotes = 0;
+let prevBytesSent = 0;
+let prevTimestamp = 0;
 
 // Configuration - Get from electronAPI (passed from main process via preload)
 let BACKEND_URL, BACKEND_WS_URL, WS_SERVER_URL;
@@ -1761,6 +1785,7 @@ async function startScreenShare(sessionId) {
     console.log("🚀 DEBUG: localStream exists:", !!localStream);
 
     // Clean up existing connections before creating new ones
+    stopAbrMonitor();
     if (peerConnection) {
       console.log("🧹 Closing existing peer connection...");
       peerConnection.close();
@@ -1819,6 +1844,7 @@ async function startScreenShare(sessionId) {
     });
 
     // Professional system audio capture implementation
+    if (ENABLE_AUDIO) {
     console.log("🔊 Starting professional system audio capture...");
 
     let audioAdded = false;
@@ -2250,6 +2276,9 @@ async function startScreenShare(sessionId) {
       );
       console.log("💡 Restart connection to try audio permission dialog again");
     }
+    } else {
+      console.log("🔊 Audio disabled by ENABLE_AUDIO flag");
+    }
 
     console.log("✅ Screen capture started successfully");
     updateStatus("Screen sharing active");
@@ -2291,16 +2320,20 @@ async function startScreenShare(sessionId) {
 
           const parameters = sender.getParameters() || {};
           parameters.encodings = parameters.encodings || [{}];
-          // Target ~2.5 Mbps; adjust if constrained by network
-          parameters.encodings[0].maxBitrate = 2_500_000; // bits per second
-          // Request more frequent keyframes to reduce recovery time
-          parameters.encodings[0].maxFramerate = 30;
+          // Use current ABR tier for initial encoding params
+          const tier = QUALITY_TIERS[currentTier];
+          parameters.encodings[0].maxBitrate = tier.maxBitrate;
+          parameters.encodings[0].maxFramerate = tier.fps;
           sender.setParameters(parameters);
 
           // Also clamp track frame rate via constraints, if supported
           const videoTrack = sender.track;
           if (videoTrack.applyConstraints) {
-            videoTrack.applyConstraints({ frameRate: { ideal: 30, max: 30 } }).catch(() => {});
+            videoTrack.applyConstraints({
+              width: { ideal: tier.width, max: tier.width },
+              height: { ideal: tier.height, max: tier.height },
+              frameRate: { ideal: tier.fps, max: tier.fps },
+            }).catch(() => {});
           }
         } catch (e) {
           console.log("⚠️ Could not set video sender parameters:", e.message);
@@ -2380,7 +2413,7 @@ async function startScreenShare(sessionId) {
             console.log("🎬 Video codec preferences set:", sorted.slice(0, 3).map(c => c.mimeType).join(", ") + "...");
           }
         }
-        if (kind === "audio" && RTCRtpSender.getCapabilities) {
+        if (ENABLE_AUDIO && kind === "audio" && RTCRtpSender.getCapabilities) {
           const caps = RTCRtpSender.getCapabilities("audio");
           if (caps && caps.codecs && caps.codecs.length > 0) {
             // Prefer Opus (best quality/bandwidth) for audio
@@ -2472,6 +2505,9 @@ async function startScreenShare(sessionId) {
 
       ws.send(jsonString);
       console.log("✅ WebRTC offer sent to viewer");
+
+      // Start adaptive bitrate monitoring
+      startAbrMonitor();
     }
   } catch (error) {
     console.error("❌ Failed to start screen sharing:", error);
@@ -2648,9 +2684,161 @@ if (window.electronAPI && window.electronAPI.onMainProcessLog) {
   });
 }
 
+// ── Adaptive Bitrate (ABR) functions ──────────────────────────────────
+
+function pollNetworkStats() {
+  if (!peerConnection) return;
+  peerConnection.getStats().then((stats) => {
+    let bytesSent = 0, packetsSent = 0, packetsLost = 0, rtt = 0;
+    let availableBitrate = 0;
+    let hasRemoteInbound = false;
+
+    stats.forEach((report) => {
+      if (report.type === 'outbound-rtp' && report.kind === 'video') {
+        bytesSent = report.bytesSent || 0;
+        packetsSent = report.packetsSent || 0;
+      }
+      if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
+        packetsLost = report.packetsLost || 0;
+        rtt = report.roundTripTime || 0;
+        hasRemoteInbound = true;
+      }
+      if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+        availableBitrate = report.availableOutgoingBitrate || 0;
+        if (report.currentRoundTripTime) rtt = report.currentRoundTripTime;
+      }
+    });
+
+    const now = performance.now();
+    const dt = prevTimestamp ? (now - prevTimestamp) / 1000 : 0;
+    const sendBitrate = dt > 0 ? ((bytesSent - prevBytesSent) * 8) / dt : 0;
+    prevBytesSent = bytesSent;
+    prevTimestamp = now;
+
+    // Compute loss ratio
+    const totalPackets = packetsSent + packetsLost;
+    const lossRatio = totalPackets > 0 ? packetsLost / totalPackets : 0;
+
+    // Compute bandwidth headroom (fraction of available bandwidth used)
+    const headroom = availableBitrate > 0 ? sendBitrate / availableBitrate : 0;
+
+    const tierIdx = TIER_ORDER.indexOf(currentTier);
+
+    // Vote: downgrade?
+    const wantDown = tierIdx > 0 && (
+      lossRatio > ABR_CONFIG.downgrade.lossRatio ||
+      rtt > ABR_CONFIG.downgrade.rttMs / 1000 ||
+      headroom > ABR_CONFIG.downgrade.headroom
+    );
+
+    // Vote: upgrade?
+    const wantUp = tierIdx < TIER_ORDER.length - 1 && hasRemoteInbound && (
+      lossRatio < ABR_CONFIG.upgrade.lossRatio &&
+      rtt < ABR_CONFIG.upgrade.rttMs / 1000 &&
+      headroom < ABR_CONFIG.upgrade.headroom
+    );
+
+    if (wantDown) {
+      consecutiveDowngradeVotes++;
+      consecutiveUpgradeVotes = 0;
+    } else if (wantUp) {
+      consecutiveUpgradeVotes++;
+      consecutiveDowngradeVotes = 0;
+    } else {
+      // Neutral — decay both counters
+      if (consecutiveDowngradeVotes > 0) consecutiveDowngradeVotes--;
+      if (consecutiveUpgradeVotes > 0) consecutiveUpgradeVotes--;
+    }
+
+    if (consecutiveDowngradeVotes >= ABR_CONFIG.hysteresis.downgradePolls) {
+      const newTier = TIER_ORDER[tierIdx - 1];
+      console.log(`[ABR] Downgrading: ${currentTier} -> ${newTier} (loss=${(lossRatio*100).toFixed(1)}% rtt=${(rtt*1000).toFixed(0)}ms headroom=${(headroom*100).toFixed(0)}%)`);
+      currentTier = newTier;
+      applyQualityTier(currentTier);
+      consecutiveDowngradeVotes = 0;
+      consecutiveUpgradeVotes = 0;
+    } else if (consecutiveUpgradeVotes >= ABR_CONFIG.hysteresis.upgradePolls) {
+      const newTier = TIER_ORDER[tierIdx + 1];
+      console.log(`[ABR] Upgrading: ${currentTier} -> ${newTier} (loss=${(lossRatio*100).toFixed(1)}% rtt=${(rtt*1000).toFixed(0)}ms headroom=${(headroom*100).toFixed(0)}%)`);
+      currentTier = newTier;
+      applyQualityTier(currentTier);
+      consecutiveDowngradeVotes = 0;
+      consecutiveUpgradeVotes = 0;
+    }
+  }).catch((err) => {
+    console.warn('[ABR] getStats failed:', err.message);
+  });
+}
+
+function applyQualityTier(tierName) {
+  const tier = QUALITY_TIERS[tierName];
+  if (!tier || !peerConnection) return;
+
+  const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+  if (!sender) return;
+
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+    params.encodings[0].maxBitrate = tier.maxBitrate;
+    params.encodings[0].maxFramerate = tier.fps;
+    sender.setParameters(params);
+  } catch (e) {
+    console.warn('[ABR] setParameters failed:', e.message);
+  }
+
+  try {
+    if (sender.track && sender.track.applyConstraints) {
+      sender.track.applyConstraints({
+        width: { ideal: tier.width, max: tier.width },
+        height: { ideal: tier.height, max: tier.height },
+        frameRate: { ideal: tier.fps, max: tier.fps },
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('[ABR] applyConstraints failed:', e.message);
+  }
+
+  // Content hint: prioritize readability at low tiers, detail at higher
+  try {
+    if (sender.track && typeof sender.track.contentHint !== 'undefined') {
+      sender.track.contentHint = (tierName === 'VERY_LOW' || tierName === 'LOW') ? 'text' : 'detail';
+    }
+  } catch (_) {}
+
+  console.log(`[ABR] Applied tier ${tierName}: ${tier.width}x${tier.height}@${tier.fps}fps, ${tier.maxBitrate/1000}kbps`);
+}
+
+function startAbrMonitor() {
+  stopAbrMonitor();
+  currentTier = 'HIGH';
+  consecutiveDowngradeVotes = 0;
+  consecutiveUpgradeVotes = 0;
+  prevBytesSent = 0;
+  prevTimestamp = 0;
+  console.log('[ABR] Starting adaptive bitrate monitor');
+  // Delay first poll to let the connection stabilize
+  setTimeout(() => {
+    if (!peerConnection) return;
+    pollNetworkStats();
+    abrIntervalId = setInterval(pollNetworkStats, ABR_CONFIG.pollIntervalMs);
+  }, ABR_CONFIG.initialDelayMs);
+}
+
+function stopAbrMonitor() {
+  if (abrIntervalId) {
+    clearInterval(abrIntervalId);
+    abrIntervalId = null;
+    console.log('[ABR] Stopped adaptive bitrate monitor');
+  }
+}
+
 // Stop screen sharing
 function stopScreenShare() {
   console.log("🛑 Stopping screen share...");
+  stopAbrMonitor();
 
   if (localStream) {
     localStream.getTracks().forEach((track) => {
@@ -2799,5 +2987,46 @@ document.addEventListener("DOMContentLoaded", init);
 
 // Start service monitoring when the page loads
 document.addEventListener("DOMContentLoaded", startServiceMonitoring);
+
+// ── Auto-update banner ──────────────────────────────────────────────
+function showUpdateBanner(message, showInstallButton) {
+  let banner = document.getElementById("update-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "update-banner";
+    banner.style.cssText =
+      "position:fixed;bottom:0;left:0;right:0;background:#1a56db;color:#fff;" +
+      "padding:10px 20px;display:flex;align-items:center;justify-content:space-between;" +
+      "font-size:14px;z-index:99999;box-shadow:0 -2px 8px rgba(0,0,0,0.3);";
+    document.body.appendChild(banner);
+  }
+  let html = `<span>${message}</span>`;
+  if (showInstallButton) {
+    html += `<button id="install-update-btn" style="background:#fff;color:#1a56db;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-weight:600;">Install &amp; Restart</button>`;
+  }
+  banner.innerHTML = html;
+  if (showInstallButton) {
+    document.getElementById("install-update-btn").addEventListener("click", () => {
+      if (window.electronAPI && window.electronAPI.installUpdate) {
+        window.electronAPI.installUpdate();
+      }
+    });
+  }
+}
+
+if (window.electronAPI) {
+  if (window.electronAPI.onUpdateAvailable) {
+    window.electronAPI.onUpdateAvailable((version) => {
+      console.log("🔄 Update available:", version);
+      showUpdateBanner(`Update v${version} is downloading...`, false);
+    });
+  }
+  if (window.electronAPI.onUpdateDownloaded) {
+    window.electronAPI.onUpdateDownloaded((version) => {
+      console.log("✅ Update downloaded:", version);
+      showUpdateBanner(`Update v${version} is ready to install.`, true);
+    });
+  }
+}
 
 console.log("✅ Permanent Access Renderer with WebSocket support loaded");

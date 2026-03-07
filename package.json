@@ -1,6 +1,6 @@
 {
   "name": "laitlum-agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Laitlum remote access agent with screen sharing capabilities",
   "main": "main.js",
   "scripts": {
@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
+    "electron-updater": "^6.8.3",
     "ws": "^8.14.2"
   },
   "build": {
@@ -96,7 +97,7 @@
           ]
         }
       ],
-      "requestedExecutionLevel": "asInvoker",
+      "requestedExecutionLevel": "requireAdministrator",
       "signAndEditExecutable": false,
       "signDlls": false,
       "verifyUpdateCodeSignature": false,
@@ -119,6 +120,13 @@
       "uninstallerIcon": "logo.ico",
       "installerHeaderIcon": "logo.ico",
       "deleteAppDataOnUninstall": true
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "laitlum",
+        "repo": "ScreenShare-Agent"
+      }
+    ]
   }
 }
