@@ -187,7 +187,7 @@ async function loadDeviceInfo() {
         const systemInfo = await window.electronAPI.getDeviceInfo();
         deviceInfo = {
           name: systemInfo.hostname || navigator.platform || "Unknown Device",
-          deviceId: generateDeviceId(),
+          deviceId: await generateDeviceId(),
           platform: systemInfo.platform || navigator.platform || "unknown",
           ipAddress: systemInfo.ipAddress || "Unknown",
           macAddress: systemInfo.macAddress || "Unknown",
@@ -198,7 +198,7 @@ async function loadDeviceInfo() {
         // Fallback if system info fails
         deviceInfo = {
           name: navigator.platform || "Unknown Device",
-          deviceId: generateDeviceId(),
+          deviceId: await generateDeviceId(),
           platform: navigator.platform || "unknown",
           ipAddress: "Unknown",
           macAddress: "Unknown",
@@ -208,7 +208,7 @@ async function loadDeviceInfo() {
       // Fallback device info since we may not have OS module in renderer
       deviceInfo = {
         name: navigator.platform || "Unknown Device",
-        deviceId: generateDeviceId(),
+        deviceId: await generateDeviceId(),
         platform: navigator.platform || "unknown",
         ipAddress: "Unknown",
         macAddress: "Unknown",
@@ -223,24 +223,48 @@ async function loadDeviceInfo() {
 }
 
 // Generate a persistent device ID (stored in localStorage)
-function generateDeviceId() {
-  let deviceId = localStorage.getItem("device_id");
-  if (!deviceId) {
-    // Create a new persistent device ID based on machine characteristics
-    const machineId =
-      navigator.platform + "_" + (navigator.hardwareConcurrency || 4);
-    deviceId =
-      "device_" +
-      btoa(machineId)
-        .replace(/[^a-zA-Z0-9]/g, "")
-        .substr(0, 16) +
-      "_" +
-      Date.now().toString(36);
-    localStorage.setItem("device_id", deviceId);
-    console.log("📱 Generated new persistent device ID:", deviceId);
-  } else {
-    console.log("📱 Using existing device ID:", deviceId);
+// Uses hardware-stable machine ID when available; falls back to random ID.
+async function generateDeviceId() {
+  const stored = localStorage.getItem("device_id");
+
+  // Try to get a stable, hardware-derived ID from the main process
+  let stableId = null;
+  if (window.electronAPI && window.electronAPI.getMachineId) {
+    try {
+      stableId = await window.electronAPI.getMachineId();
+    } catch (e) {
+      console.warn("⚠️ getMachineId failed, using fallback:", e);
+    }
   }
+
+  if (stableId) {
+    // If we already have a stored ID that differs from the stable one, save for migration
+    if (stored && stored !== stableId) {
+      localStorage.setItem("device_id_old", stored);
+      console.log("📱 Stored old device ID for migration:", stored, "→", stableId);
+    }
+    localStorage.setItem("device_id", stableId);
+    console.log("📱 Using stable machine-based device ID:", stableId);
+    return stableId;
+  }
+
+  // Fallback: use existing stored ID, or generate a random one (legacy behavior)
+  if (stored) {
+    console.log("📱 Using existing device ID:", stored);
+    return stored;
+  }
+
+  const machineId =
+    navigator.platform + "_" + (navigator.hardwareConcurrency || 4);
+  const deviceId =
+    "device_" +
+    btoa(machineId)
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .substr(0, 16) +
+    "_" +
+    Date.now().toString(36);
+  localStorage.setItem("device_id", deviceId);
+  console.log("📱 Generated new random device ID (fallback):", deviceId);
   return deviceId;
 }
 
@@ -971,7 +995,7 @@ async function initializeDeviceInfo() {
       const systemInfo = await window.electronAPI.getDeviceInfo();
       deviceInfo = {
         name: systemInfo.hostname || navigator.platform || "Unknown Device",
-        deviceId: generateDeviceId(),
+        deviceId: await generateDeviceId(),
         platform: systemInfo.platform || navigator.platform || "unknown",
         ipAddress: systemInfo.ipAddress || "Unknown",
         macAddress: systemInfo.macAddress || "Unknown",
@@ -982,7 +1006,7 @@ async function initializeDeviceInfo() {
       // Fallback device info
       deviceInfo = {
         name: navigator.platform || "Unknown Device",
-        deviceId: generateDeviceId(),
+        deviceId: await generateDeviceId(),
         platform: navigator.platform || "unknown",
         ipAddress: "Unknown",
         macAddress: "Unknown",
@@ -994,7 +1018,7 @@ async function initializeDeviceInfo() {
     // Fallback device info since we may not have OS module in renderer
     deviceInfo = {
       name: navigator.platform || "Unknown Device",
-      deviceId: generateDeviceId(),
+      deviceId: await generateDeviceId(),
       platform: navigator.platform || "unknown",
       ipAddress: "Unknown",
       macAddress: "Unknown",
@@ -1253,14 +1277,26 @@ async function registerDevice() {
   try {
     updateStatus("Registering device...");
 
+    // Get agent version from system info (falls back to package.json version)
+    let agentVersion = "1.0.0";
+    try {
+      if (window.electronAPI && window.electronAPI.getDeviceInfo) {
+        const sysInfo = await window.electronAPI.getDeviceInfo();
+        if (sysInfo.agentVersion) agentVersion = sysInfo.agentVersion;
+      }
+    } catch (_) { /* use default */ }
+
+    const oldDeviceId = localStorage.getItem("device_id_old") || undefined;
+
     const registrationData = {
       name: deviceInfo.name,
       device_id: deviceInfo.deviceId,
       platform: deviceInfo.platform,
       ip_address: deviceInfo.ipAddress,
       mac_address: deviceInfo.macAddress,
-      agent_version: "1.0.0",
+      agent_version: agentVersion,
       owner_email: userEmail,
+      old_device_id: oldDeviceId,
     };
 
     console.log("📤 Sending registration data:", registrationData);
@@ -1287,6 +1323,9 @@ async function registerDevice() {
         );
       }
       deviceInfo.id = result.device.id;
+
+      // Clear migration state after successful registration
+      localStorage.removeItem("device_id_old");
 
       // Save device info to localStorage for persistence
       localStorage.setItem("defender_device_id", deviceInfo.deviceId);

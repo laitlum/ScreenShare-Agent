@@ -103,6 +103,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Device info
   getDeviceInfo: () => ipcRenderer.invoke("get-device-info"),
+  getMachineId: () => ipcRenderer.invoke("get-machine-id"),
 
   // Remote control
   sendRemoteInput: (inputData) =>

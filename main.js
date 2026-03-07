@@ -805,6 +805,7 @@ ipcMain.handle("get-device-info", async () => {
       macAddress: macAddress,
       architecture: os.arch(),
       type: os.type(),
+      agentVersion: app.getVersion(),
     };
   } catch (error) {
     console.error("❌ Failed to get device info:", error);
@@ -815,7 +816,64 @@ ipcMain.handle("get-device-info", async () => {
       macAddress: "Unknown",
       architecture: process.arch,
       type: "Unknown",
+      agentVersion: app.getVersion(),
     };
+  }
+});
+
+// Stable machine ID handler — returns a hardware-derived, install-independent device ID
+ipcMain.handle("get-machine-id", async () => {
+  const crypto = require("crypto");
+  const { execSync } = require("child_process");
+
+  try {
+    let rawId = "";
+
+    if (process.platform === "win32") {
+      // Windows: MachineGuid from registry (survives reinstalls)
+      const output = execSync(
+        'reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid',
+        { encoding: "utf8", timeout: 5000 }
+      );
+      const match = output.match(/MachineGuid\s+REG_SZ\s+(.+)/);
+      if (match) rawId = match[1].trim();
+    } else if (process.platform === "darwin") {
+      // macOS: Hardware UUID
+      const output = execSync("system_profiler SPHardwareDataType", {
+        encoding: "utf8",
+        timeout: 5000,
+      });
+      const match = output.match(/Hardware UUID:\s*(.+)/i);
+      if (match) rawId = match[1].trim();
+    } else {
+      // Linux: /etc/machine-id
+      const fs = require("fs");
+      if (fs.existsSync("/etc/machine-id")) {
+        rawId = fs.readFileSync("/etc/machine-id", "utf8").trim();
+      }
+    }
+
+    // Fallback: hash hostname + first MAC + platform
+    if (!rawId) {
+      const interfaces = os.networkInterfaces();
+      let mac = "";
+      for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+          if (!iface.internal && iface.mac && iface.mac !== "00:00:00:00:00:00") {
+            mac = iface.mac;
+            break;
+          }
+        }
+        if (mac) break;
+      }
+      rawId = `${os.hostname()}|${mac}|${process.platform}`;
+    }
+
+    const hash = crypto.createHash("sha256").update(rawId).digest("hex");
+    return "device_" + hash.substring(0, 32);
+  } catch (error) {
+    console.error("❌ Failed to get machine ID:", error);
+    return null; // Renderer will fall back to random ID
   }
 });
 
