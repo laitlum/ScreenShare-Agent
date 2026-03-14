@@ -15,6 +15,13 @@ const DEVELOPMENT_URLS = {
   WS_SERVER_URL: 'ws://localhost:8081/ws',
 };
 
+// Local LAN build — agent on a separate machine connecting to dev backend
+const LOCAL_URLS = {
+  BACKEND_URL: 'http://192.168.7.72:8000',
+  BACKEND_WS_URL: 'ws://192.168.7.72:8081/ws',
+  WS_SERVER_URL: 'ws://192.168.7.72:8081/ws',
+};
+
 // Detect if running from source (development) vs packaged
 // Packaged apps have __dirname inside app.asar or in .app/Contents/Resources
 const isDevelopment = process.env.NODE_ENV !== 'production' &&
@@ -57,6 +64,15 @@ if (isDevelopment) {
     TURN_PASSWORD: process.env.TURN_PASSWORD || "",
   };
   console.log('🔧 Running in DEVELOPMENT mode (source files detected)');
+} else if (process.env.LOCAL_BUILD === 'true') {
+  environment = 'local';
+  selectedUrls = {
+    ...LOCAL_URLS,
+    TURN_URL:      process.env.TURN_URL      || "",
+    TURN_USERNAME: process.env.TURN_USERNAME || "",
+    TURN_PASSWORD: process.env.TURN_PASSWORD || "",
+  };
+  console.log('🏠 Running in LOCAL mode (LAN testing)');
 } else {
   environment = 'production';
   // Use env vars if available, otherwise use hardcoded production URLs

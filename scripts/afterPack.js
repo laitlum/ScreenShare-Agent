@@ -41,7 +41,9 @@ exports.default = async function afterPack(context) {
   const result = spawnSync(rceditExe, args, { stdio: 'inherit' });
 
   if (result.status !== 0) {
-    throw new Error(`rcedit failed with exit code ${result.status}`);
+    // rcedit is a Windows binary — skip icon patching on non-Windows hosts (e.g. macOS cross-compile)
+    console.warn(`⚠️  afterPack: rcedit exited with code ${result.status} — skipping icon patch (likely cross-compiling on macOS).`);
+    return;
   }
 
   console.log('✅ afterPack: exe patched successfully.');
