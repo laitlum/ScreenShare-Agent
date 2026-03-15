@@ -87,8 +87,11 @@ function showLoginError(msg) {
     el.style.cssText =
       "color:#f87171;font-size:12px;margin-top:6px;padding:8px 10px;" +
       "background:#2a1010;border:1px solid #5a1a1a;border-radius:6px;";
-    // Append inside the fluent-surface container that holds the email input
-    const container = document.getElementById("user-email")?.closest(".fluent-surface");
+    // Prefer the fluent-surface container holding the email input;
+    // fall back to the modal root so the error is never silently dropped
+    const container =
+      document.getElementById("user-email")?.closest(".fluent-surface") ||
+      document.getElementById("login-modal");
     if (container) container.appendChild(el);
   }
   el.textContent = msg;
@@ -1391,15 +1394,12 @@ async function registerDevice() {
       } catch (_) {}
 
       if (errorCode === "device_limit_reached") {
-        showLoginError(
-          "Device limit reached for your license. Remove a device from the dashboard to add this one."
-        );
+        // Modal is already closed at registration time — show in dashboard status
+        updateStatus("Device limit reached. Remove a device from the dashboard to add this one.");
         return;
       }
       if (errorCode === "not_licensed") {
-        showLoginError(
-          "No active license found. Please visit the website to enter your license key."
-        );
+        updateStatus("No active license. Please visit the website to enter your license key.");
         return;
       }
       throw new Error(`Registration failed: ${errorCode}`);
