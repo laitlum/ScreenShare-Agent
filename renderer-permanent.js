@@ -78,6 +78,23 @@ try {
 console.log('🔧 Backend URL:', BACKEND_URL);
 console.log('🔧 WebSocket URL:', WS_SERVER_URL);
 
+// Show an error message inside the login modal
+function showLoginError(msg) {
+  let el = document.getElementById("login-error-msg");
+  if (!el) {
+    el = document.createElement("p");
+    el.id = "login-error-msg";
+    el.style.cssText =
+      "color:#f87171;font-size:12px;margin-top:6px;padding:8px 10px;" +
+      "background:#2a1010;border:1px solid #5a1a1a;border-radius:6px;";
+    // Append inside the fluent-surface container that holds the email input
+    const container = document.getElementById("user-email")?.closest(".fluent-surface");
+    if (container) container.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = "block";
+}
+
 // Build ICE server list — reads TURN credentials from electronAPI config if provided
 function buildIceServers() {
   const servers = [
@@ -499,13 +516,17 @@ function showLoginModal() {
 
 // Hide login modal
 function hideLoginModal() {
+  // Clear any error message when modal is dismissed
+  const errEl = document.getElementById("login-error-msg");
+  if (errEl) errEl.style.display = "none";
+
   const modal = document.getElementById("login-modal");
   const dashboard = document.getElementById("dashboard");
-  
+
   if (modal) {
     modal.classList.add("hidden");
   }
-  
+
   if (dashboard) {
     dashboard.classList.remove("hidden");
   }
@@ -974,18 +995,40 @@ function updateScanStatus(message, progress) {
   if (progressBar) progressBar.style.width = progress + "%";
 }
 
-// Find or create user by email
+// Find or create user by email — calls the agent login endpoint
 async function findOrCreateUser(email) {
-  try {
-    // For now, we'll just store the email locally
-    // In a real system, you might sync with the backend
-    console.log(`📧 Setting up protection for: ${email}`);
-    userEmail = email;
-    isAuthenticated = true; // Mark as "authenticated" for local use
-    return { email: email };
-  } catch (error) {
-    throw new Error(`Failed to setup user: ${error.message}`);
+  const response = await fetch(`${BACKEND_URL}/public/agent/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  if (response.status === 404) {
+    showLoginError("User not found. Check the email address and try again.");
+    throw new Error("user_not_found");
   }
+
+  if (response.status === 403) {
+    const data = await response.json().catch(() => ({}));
+    const code = data.error_code || data.error || "";
+    if (code === "not_licensed") {
+      showLoginError(
+        "No license found for this account. Please visit the website to enter your license key."
+      );
+      throw new Error("not_licensed");
+    }
+    showLoginError("Access denied. Contact your administrator.");
+    throw new Error("forbidden");
+  }
+
+  if (!response.ok) {
+    throw new Error(`Login failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  userEmail = email;
+  isAuthenticated = true;
+  return data;
 }
 
 // Initialize device info (same logic as in initializeApp)
@@ -1341,8 +1384,25 @@ async function registerDevice() {
       updateUI();
       // Note: showAgentRunning() already calls initializeWebSocket() via setTimeout — no duplicate call here.
     } else {
-      const error = await response.text();
-      throw new Error(`Registration failed: ${error}`);
+      let errorCode = "unknown";
+      try {
+        const errData = await response.json();
+        errorCode = errData.error_code || errData.error || "unknown";
+      } catch (_) {}
+
+      if (errorCode === "device_limit_reached") {
+        showLoginError(
+          "Device limit reached for your license. Remove a device from the dashboard to add this one."
+        );
+        return;
+      }
+      if (errorCode === "not_licensed") {
+        showLoginError(
+          "No active license found. Please visit the website to enter your license key."
+        );
+        return;
+      }
+      throw new Error(`Registration failed: ${errorCode}`);
     }
   } catch (error) {
     console.error("❌ Device registration failed:", error);
