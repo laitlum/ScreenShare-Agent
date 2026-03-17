@@ -17,7 +17,7 @@
     "build": "electron-builder -mwl",
     "build:mac": "electron-builder --mac dmg",
     "build:mac-zip": "electron-builder --mac zip",
-    "build:win": "electron-builder --win nsis",
+    "build:win": "electron-builder --win nsis --x64",
     "build:win-portable": "electron-builder --win portable",
     "build:win-zip": "electron-builder --win zip",
     "build:prod": "cross-env NODE_ENV=production electron-builder -mwl"
