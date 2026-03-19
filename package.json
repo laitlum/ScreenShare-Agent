@@ -35,11 +35,13 @@
   "author": "Nirvana",
   "license": "MIT",
   "devDependencies": {
+    "@electron/asar": "^4.1.0",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
     "electron": "^30.0.8",
     "electron-builder": "^24.13.3",
-    "rcedit": "^5.0.2"
+    "rcedit": "^5.0.2",
+    "resedit": "^3.0.2"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
