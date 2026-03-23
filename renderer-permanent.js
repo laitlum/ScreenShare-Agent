@@ -21,7 +21,8 @@ let isSignedIn = false;
 let lastScanTime = null;
 let agentStartTime = Date.now();
 let dashboardInterval = null;
-const ENABLE_AUDIO = false;
+const ENABLE_AUDIO = true;
+const AUDIO_MAX_BITRATE = 96_000; // 96 kbps — additive on top of video, never carved from it
 
 // ── Adaptive Bitrate (ABR) ────────────────────────────────────────────
 const QUALITY_TIERS = {
@@ -2374,6 +2375,18 @@ async function startScreenShare(sessionId) {
         "🚫 Microphone audio intentionally disabled (system audio only)"
       );
       console.log("💡 Restart connection to try audio permission dialog again");
+
+      // Inject a silent audio track so the SDP always includes an audio m-line.
+      // This ensures the viewer always negotiates audio and avoids renegotiation
+      // surprises if a system audio source becomes available in a future session.
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const silentTrack = audioCtx.createMediaStreamDestination().stream.getAudioTracks()[0];
+        localStream.addTrack(silentTrack);
+        console.log("🔇 Silent audio track injected (placeholder — no system audio available)");
+      } catch (silentErr) {
+        console.warn("⚠️ Could not inject silent audio track:", silentErr?.message);
+      }
     }
     } else {
       console.log("🔊 Audio disabled by ENABLE_AUDIO flag");
@@ -2436,6 +2449,17 @@ async function startScreenShare(sessionId) {
           }
         } catch (e) {
           console.log("⚠️ Could not set video sender parameters:", e.message);
+        }
+      } else if (sender.track && sender.track.kind === "audio") {
+        // Cap audio bitrate independently — must never affect video ABR calculations
+        try {
+          const parameters = sender.getParameters() || {};
+          parameters.encodings = parameters.encodings || [{}];
+          parameters.encodings[0].maxBitrate = AUDIO_MAX_BITRATE;
+          sender.setParameters(parameters).catch(() => {});
+          console.log(`🔊 Audio sender: bitrate capped at ${AUDIO_MAX_BITRATE / 1000} kbps`);
+        } catch (e) {
+          console.log("⚠️ Could not set audio sender parameters:", e.message);
         }
       }
     });
@@ -2555,7 +2579,29 @@ async function startScreenShare(sessionId) {
       return;
     }
 
-    await peerConnection.setLocalDescription(offer);
+    // Munge Opus fmtp line to enable DTX (efficiency during silence) and in-band FEC (resilience).
+    // Must happen before setLocalDescription so both local and remote descriptions are consistent.
+    let finalOffer = offer;
+    if (ENABLE_AUDIO && offer.sdp.includes('opus')) {
+      const opusPt = (offer.sdp.match(/a=rtpmap:(\d+) opus\/48000/i) || [])[1];
+      if (opusPt) {
+        const fmtpRe = new RegExp(`(a=fmtp:${opusPt} [^\r\n]+)`);
+        let mungedSdp = offer.sdp;
+        if (fmtpRe.test(mungedSdp)) {
+          mungedSdp = mungedSdp.replace(fmtpRe, '$1;usedtx=1;useinbandfec=1');
+        } else {
+          // No fmtp line yet — insert one after the rtpmap line
+          mungedSdp = mungedSdp.replace(
+            new RegExp(`(a=rtpmap:${opusPt} opus\\/48000[^\r\n]*(?:\r?\n))`),
+            `$1a=fmtp:${opusPt} usedtx=1;useinbandfec=1\r\n`
+          );
+        }
+        finalOffer = { type: offer.type, sdp: mungedSdp };
+        console.log("🔊 Opus DTX+FEC injected into offer SDP");
+      }
+    }
+
+    await peerConnection.setLocalDescription(finalOffer);
     console.log("📋 Local description set successfully");
 
     if (ws && ws.readyState === WebSocket.OPEN) {
