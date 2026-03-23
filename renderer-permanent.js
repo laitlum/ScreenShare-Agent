@@ -1949,53 +1949,16 @@ async function startScreenShare(sessionId) {
 
     let audioAdded = false;
 
-    // Windows-first: getDisplayMedia with systemAudio include
-    if (!audioAdded && navigator.userAgent.toLowerCase().includes("windows")) {
-      try {
-        console.log("🎵 Windows: requesting getDisplayMedia with systemAudio: 'include'");
-        const displayWithAudio = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            displaySurface: "monitor",
-            frameRate: { max: 1 },
-          },
-          audio: {
-            systemAudio: "include",
-            suppressLocalAudioPlayback: true,
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        });
-
-        const tracks = displayWithAudio.getAudioTracks();
-        if (tracks.length > 0) {
-          const existingAudioTracks = localStream.getAudioTracks();
-          existingAudioTracks.forEach((existingTrack) => {
-            localStream.removeTrack(existingTrack);
-            existingTrack.stop();
-          });
-          tracks.forEach((t) => localStream.addTrack(t));
-          // stop temporary video tracks from this capture
-          displayWithAudio.getVideoTracks().forEach((t) => t.stop());
-          audioAdded = true;
-          console.log("✅ Windows system audio track added via getDisplayMedia");
-        } else {
-          console.log("⚠️ Windows getDisplayMedia returned no audio tracks");
-        }
-      } catch (winAudioErr) {
-        console.log("⚠️ Windows getDisplayMedia systemAudio failed:", winAudioErr.message);
-      }
-    }
-
     // Method 0: Electron/Chromium desktop loopback
-    // Safe on Electron >= 28 (WGC path); allow on Windows for v28+
+    // Uses chromeMediaSource: 'desktop' — no dialog, captures system audio directly.
+    // Preferred on Windows in Electron over getDisplayMedia (which opens a confusing
+    // second screen-picker dialog with an easy-to-miss "Share audio" checkbox).
     {
       const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "") || "";
       const isWindows = ua.toLowerCase().includes("windows");
       const electronMatch = ua.match(/Electron\/(\d+)/i);
       const electronMajor = electronMatch ? parseInt(electronMatch[1], 10) : 0;
-      // Disable Windows loopback for now due to renderer instability on some devices
-      const allowWindowsLoopback = false;
+      const allowWindowsLoopback = true; // Enabled: Electron 30 WGC path is stable
 
       if (!audioAdded && (!isWindows || allowWindowsLoopback)) {
         try {
@@ -2864,8 +2827,12 @@ function pollNetworkStats() {
     const totalPackets = packetsSent + packetsLost;
     const lossRatio = totalPackets > 0 ? packetsLost / totalPackets : 0;
 
-    // Compute bandwidth headroom (fraction of available bandwidth used)
-    const headroom = availableBitrate > 0 ? sendBitrate / availableBitrate : 0;
+    // Compute bandwidth headroom — reserve audio bandwidth so audio never
+    // causes the ABR to falsely perceive video congestion.
+    const effectiveAvailable = ENABLE_AUDIO
+      ? Math.max(0, availableBitrate - AUDIO_MAX_BITRATE)
+      : availableBitrate;
+    const headroom = effectiveAvailable > 0 ? sendBitrate / effectiveAvailable : 0;
 
     const tierIdx = TIER_ORDER.indexOf(currentTier);
 
