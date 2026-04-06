@@ -1926,44 +1926,78 @@ async function startScreenShare(sessionId) {
     const primaryScreen = sources[0]; // Use the first (primary) screen
     console.log("🖥️ Using screen source:", primaryScreen.name);
 
-    // First, try video-only capture to avoid crashes
-    console.log("🎬 Starting video capture...");
-    localStream = await navigator.mediaDevices.getUserMedia({
-      audio: false, // Start without audio to avoid crashes
-      video: {
-        mandatory: {
-          chromeMediaSource: "desktop",
-          chromeMediaSourceId: primaryScreen.id,
-          minWidth: 1280,
-          maxWidth: 1920,
-          minHeight: 720,
-          maxHeight: 1080,
-          maxFrameRate: 30,
-        },
-      },
-    });
-
-    // Professional system audio capture implementation
-    if (ENABLE_AUDIO) {
-    console.log("🔊 Starting professional system audio capture...");
-
+    // Capture video + system audio together in a single getUserMedia call.
+    // A separate audio call using the same chromeMediaSourceId crashes the renderer;
+    // a combined call works because Electron's desktop capturer handles both tracks
+    // from the same session without conflict.
     let audioAdded = false;
+    if (ENABLE_AUDIO) {
+      try {
+        console.log("🎬 Starting combined video+audio desktop capture...");
+        localStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            mandatory: {
+              chromeMediaSource: "desktop",
+              chromeMediaSourceId: primaryScreen.id,
+            },
+          },
+          video: {
+            mandatory: {
+              chromeMediaSource: "desktop",
+              chromeMediaSourceId: primaryScreen.id,
+              minWidth: 1280,
+              maxWidth: 1920,
+              minHeight: 720,
+              maxHeight: 1080,
+              maxFrameRate: 30,
+            },
+          },
+        });
+        const audioTracks = localStream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          audioAdded = true;
+          console.log("✅ System audio captured via desktop loopback:", audioTracks[0].label);
+        } else {
+          console.log("⚠️ Desktop capture returned no audio tracks — will try fallback methods");
+        }
+      } catch (e) {
+        console.log("⚠️ Combined video+audio capture failed:", e.message, "— falling back to video-only");
+        localStream = null;
+      }
+    }
 
-    // Method 0: Electron/Chromium desktop loopback
-    // Uses chromeMediaSource: 'desktop' — no dialog, captures system audio directly.
-    // Preferred on Windows in Electron over getDisplayMedia (which opens a confusing
-    // second screen-picker dialog with an easy-to-miss "Share audio" checkbox).
+    if (!localStream) {
+      console.log("🎬 Starting video-only desktop capture...");
+      localStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource: "desktop",
+            chromeMediaSourceId: primaryScreen.id,
+            minWidth: 1280,
+            maxWidth: 1920,
+            minHeight: 720,
+            maxHeight: 1080,
+            maxFrameRate: 30,
+          },
+        },
+      });
+    }
+
+    // Fallback audio methods (Stereo Mix, VB-CABLE) for machines where
+    // desktop loopback audio is unavailable.
+    if (ENABLE_AUDIO) {
+    console.log("🔊 Checking fallback audio sources...");
+
+    // Method 0 (legacy separate call — kept as last-resort fallback for non-Windows)
     {
       const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "") || "";
       const isWindows = ua.toLowerCase().includes("windows");
-      const electronMatch = ua.match(/Electron\/(\d+)/i);
-      const electronMajor = electronMatch ? parseInt(electronMatch[1], 10) : 0;
-      const allowWindowsLoopback = true; // Enabled: Electron 30 WGC path is stable
 
-      if (!audioAdded && (!isWindows || allowWindowsLoopback)) {
+      if (!audioAdded && !isWindows) {
         try {
           console.log(
-            "🎵 Trying native desktop loopback audio (chromeMediaSource: 'desktop')..."
+            "🎵 Trying native desktop loopback audio (macOS/Linux)..."
           );
           const loopbackStream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -1999,10 +2033,6 @@ async function startScreenShare(sessionId) {
         } catch (loopbackError) {
           console.log("⚠️ Loopback audio not available:", loopbackError.message);
         }
-      } else if (!audioAdded && isWindows && !allowWindowsLoopback) {
-        console.log(
-          "⏭️ Skipping native desktop loopback on Windows for older Electron; trying other methods..."
-        );
       }
     }
 
@@ -2092,6 +2122,7 @@ async function startScreenShare(sessionId) {
               echoCancellation: false,
               noiseSuppression: false,
               autoGainControl: false,
+              latency: 0,   // request minimum capture buffer to reduce audio lag
             },
           });
 
@@ -2149,6 +2180,7 @@ async function startScreenShare(sessionId) {
               echoCancellation: false,
               noiseSuppression: false,
               autoGainControl: false,
+              latency: 0,   // request minimum capture buffer to reduce audio lag
               sampleRate: 48000,
               channelCount: 2,
             },
@@ -2187,8 +2219,10 @@ async function startScreenShare(sessionId) {
       }
     }
 
-    // Method 3: Forced macOS System Audio (Most Reliable)
-    if (!audioAdded) {
+    // Method 3: macOS System Audio via getDisplayMedia (macOS only)
+    // NEVER run on Windows — getDisplayMedia opens a screen picker dialog that
+    // conflicts with the existing getUserMedia desktop capture and freezes the video stream.
+    if (!audioAdded && !navigator.platform.toLowerCase().includes('win')) {
       try {
         console.log(
           "🎵 Method 3: Forcing macOS system audio permission dialog..."
@@ -2827,12 +2861,11 @@ function pollNetworkStats() {
     const totalPackets = packetsSent + packetsLost;
     const lossRatio = totalPackets > 0 ? packetsLost / totalPackets : 0;
 
-    // Compute bandwidth headroom — reserve audio bandwidth so audio never
-    // causes the ABR to falsely perceive video congestion.
-    const effectiveAvailable = ENABLE_AUDIO
-      ? Math.max(0, availableBitrate - AUDIO_MAX_BITRATE)
-      : availableBitrate;
-    const headroom = effectiveAvailable > 0 ? sendBitrate / effectiveAvailable : 0;
+    // Compute bandwidth headroom using raw available bandwidth.
+    // Video and audio senders are independently capped via setParameters — no need
+    // to subtract audio budget here; doing so falsely inflates headroom and causes
+    // unnecessary video quality downgrades.
+    const headroom = availableBitrate > 0 ? sendBitrate / availableBitrate : 0;
 
     const tierIdx = TIER_ORDER.indexOf(currentTier);
 

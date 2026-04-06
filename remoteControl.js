@@ -176,7 +176,7 @@ async function moveMouseAbsolute(absX, absY) {
   }
 }
 
-// Click mouse at current position
+// Click mouse at current position (full press+release)
 async function clickMouse(button = "left") {
   try {
     if (button === "right") {
@@ -188,6 +188,32 @@ async function clickMouse(button = "left") {
     return { success: true };
   } catch (error) {
     console.error('❌ Mouse click failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Press mouse button without releasing (for separate down/up control)
+async function pressMouseButton(button = "left") {
+  try {
+    const btn = button === "right" ? right : left;
+    await mouse.pressButton(btn);
+    console.log(`✅ Mouse press: ${button}`);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Mouse press failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Release mouse button
+async function releaseMouseButton(button = "left") {
+  try {
+    const btn = button === "right" ? right : left;
+    await mouse.releaseButton(btn);
+    console.log(`✅ Mouse release: ${button}`);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Mouse release failed:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -515,11 +541,13 @@ async function mouseDragSelection(startX, startY, endX, endY, screenWidth, scree
   }
 }
 
-module.exports = { 
-  moveMouse, 
-  moveMouseAbsolute, 
-  clickMouse, 
-  typeChar, 
+module.exports = {
+  moveMouse,
+  moveMouseAbsolute,
+  clickMouse,
+  pressMouseButton,
+  releaseMouseButton,
+  typeChar,
   pressKey,
   selectAndDeleteText,
   deleteSelectedText,

